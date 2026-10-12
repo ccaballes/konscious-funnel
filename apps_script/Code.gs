@@ -17,6 +17,17 @@ function num_(v) {
   return typeof v === 'number' && isFinite(v) ? v : null;
 }
 
+// Brand and platform per project, for the side menu: { 'VBP-FB': { brand: 'Vital BP', platform: 'Facebook' } }
+function projectMeta_() {
+  const ws = SpreadsheetApp.getActive().getSheetByName('Projects');
+  const meta = {};
+  if (!ws || ws.getLastRow() < 2) return meta;
+  ws.getRange(2, 1, ws.getLastRow() - 1, 3).getValues().forEach(function (r) {
+    if (r[0] !== '') meta[String(r[0])] = { brand: String(r[1]), platform: String(r[2]) };
+  });
+  return meta;
+}
+
 function getQ1() {
   const ws = SpreadsheetApp.getActive().getSheetByName(Q1_TAB);
   if (!ws) throw new Error('Tab "' + Q1_TAB + '" not found. Run the notebook\'s dashboard cell first.');
@@ -37,6 +48,7 @@ function getQ1() {
       };
     });
   return {
+    meta: projectMeta_(),
     latest: windows[0][0],
     current: [windows[1][0], windows[1][1]],
     prior: [windows[2][0], windows[2][1]],

@@ -52,6 +52,15 @@
     padding: 7px 10px; color: var(--text-secondary); cursor: pointer; }
   .nav-item:hover { background: var(--surface-1); color: var(--text-primary); }
   .nav-item[aria-current="page"] { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+  .nav-group { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .nav-group .chev { width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg); transition: transform .15s; flex: none; margin-right: 4px; }
+  .nav-group[aria-expanded="true"] .chev { transform: rotate(45deg); }
+  .nav-group.has-current { color: var(--text-primary); }
+  .nav-sub { padding-left: 12px; margin: 2px 0 6px; }
+  .nav-sub .nav-item { font-size: 13px; padding: 6px 10px; }
+  .chip { display: inline-block; font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 999px; padding: 1px 10px; margin-left: 10px; vertical-align: 3px; }
 
   .main { padding-block: 20px 48px; padding-inline: 24px; min-width: 0; }
   .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -184,7 +193,7 @@
       <p class="nav-label">Navigation</p>
       <button class="nav-item" data-go="all">All projects</button>
       <button class="nav-item" data-go="email">Email &amp; SMS</button>
-      <p class="nav-label">Projects</p>
+      <p class="nav-label">Brands</p>
       <div id="nav-projects"></div>
     </nav>
   </aside>
@@ -301,11 +310,37 @@
   }
 
   // ---------- navigation ----------
+  // Brand and platform per project from the notebook's Projects tab; name-based fallback otherwise.
+  var PLATFORM_ORDER = ['Facebook', 'Google'];
+  function metaOf(name) {
+    var m = (q1Data.meta || {})[name];
+    if (m) return m;
+    var g = /-Google$/i.test(name) ? 'Google' : /-FB$/i.test(name) ? 'Facebook' : 'Other';
+    return { brand: name.replace(/-(FB|Google)$/i, ''), platform: g };
+  }
+  var openGroups = {};
   function buildNav() {
-    document.getElementById('nav-projects').innerHTML = q1Data.projects.map(function (p) {
-      return '<button class="nav-item" data-go="project" data-project="' + esc(p.project) + '">' + esc(p.project) + '</button>';
+    var groups = {};
+    q1Data.projects.forEach(function (p) {
+      var m = metaOf(p.project);
+      (groups[m.brand] = groups[m.brand] || []).push({ project: p.project, platform: m.platform });
+    });
+    var rank = function (pl) { var i = PLATFORM_ORDER.indexOf(pl); return i < 0 ? 99 : i; };
+    document.getElementById('nav-projects').innerHTML = Object.keys(groups).sort(function (a, b) { return a.localeCompare(b); }).map(function (brand, gi) {
+      var items = groups[brand].sort(function (a, b) { return rank(a.platform) - rank(b.platform) || a.platform.localeCompare(b.platform); });
+      return '<button class="nav-item nav-group" data-brand="' + esc(brand) + '" aria-expanded="false" aria-controls="grp-' + gi + '">' +
+        '<span>' + esc(brand) + '</span><span class="chev" aria-hidden="true"></span></button>' +
+        '<div class="nav-sub" id="grp-' + gi + '" hidden>' + items.map(function (it) {
+          return '<button class="nav-item" data-go="project" data-project="' + esc(it.project) + '">' + esc(it.platform) + '</button>';
+        }).join('') + '</div>';
     }).join('');
-    document.querySelectorAll('#nav .nav-item').forEach(function (b) {
+    document.querySelectorAll('#nav .nav-group').forEach(function (b) {
+      b.addEventListener('click', function () {
+        openGroups[b.dataset.brand] = b.getAttribute('aria-expanded') !== 'true';
+        markNav();
+      });
+    });
+    document.querySelectorAll('#nav .nav-item[data-go]').forEach(function (b) {
       b.addEventListener('click', function () {
         if (b.dataset.go === 'project') openProject(b.dataset.project); else setView(b.dataset.go);
         document.getElementById('side').classList.remove('open');
@@ -315,9 +350,17 @@
     markNav();
   }
   function markNav() {
-    document.querySelectorAll('#nav .nav-item').forEach(function (b) {
+    document.querySelectorAll('#nav .nav-item[data-go]').forEach(function (b) {
       var on = b.dataset.go === view && (view !== 'project' || b.dataset.project === currentProject);
       if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+    // The brand of the open project page stays expanded and highlighted.
+    var curBrand = view === 'project' && currentProject && q1Data ? metaOf(currentProject).brand : null;
+    document.querySelectorAll('#nav .nav-group').forEach(function (g) {
+      var brand = g.dataset.brand, open = !!openGroups[brand] || brand === curBrand;
+      g.setAttribute('aria-expanded', String(open));
+      g.classList.toggle('has-current', brand === curBrand);
+      document.getElementById(g.getAttribute('aria-controls')).hidden = !open;
     });
   }
   document.getElementById('menu-btn').addEventListener('click', function () {
@@ -340,7 +383,11 @@
     document.getElementById('view-email').hidden = v !== 'email';
     document.getElementById('metrics').hidden = v === 'email';
     document.getElementById('period-seg').hidden = v === 'email';
-    document.getElementById('page-title').textContent = v === 'all' ? 'All projects' : v === 'email' ? 'Email & SMS' : (currentProject || '');
+    var title = document.getElementById('page-title');
+    if (v === 'project' && currentProject && q1Data) {
+      var m = metaOf(currentProject);
+      title.innerHTML = esc(m.brand) + '<span class="chip" title="' + esc(currentProject) + '">' + esc(m.platform) + '</span>';
+    } else title.textContent = v === 'all' ? 'All projects' : v === 'email' ? 'Email & SMS' : (currentProject || '');
     if (v === 'project' && !q2Data) google.script.run.withSuccessHandler(renderQ2).withFailureHandler(showError).getQ2();
     else if (v === 'project') drawProject();
     if (v === 'email' && !emailData) google.script.run.withSuccessHandler(renderEmail).withFailureHandler(showError).getEmail();
