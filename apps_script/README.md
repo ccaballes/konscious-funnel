@@ -41,6 +41,14 @@ Feb), the last-month window stops at that month's final day.
 
 After that, every notebook run refreshes the numbers; just reload the page.
 
+## Pages and links
+
+- **All projects**: every project side by side. Click a project name to open its page.
+- **Project pages**: one page per project, with its month-to-date tiles, UTM Source
+  pie and top 10 UTM Content. Each has its own link: add `?project=SF` (any project
+  name) to the web app URL, e.g. `https://script.google.com/.../exec?project=SF`.
+- **Email & SMS**: `?view=email`.
+
 ## Updating the code
 
 When `Code.gs` or `Index.html` change in this repo, paste the new versions in,

@@ -75,6 +75,7 @@
   .note { color: var(--text-muted); font-size: 12px; margin: 4px 0 12px; }
   .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 480px) { .tiles { grid-template-columns: 1fr 1fr; gap: 8px; } .tile .value { font-size: 22px; } }
   .tile .label { color: var(--text-secondary); font-size: 13px; }
   .tile .value { font-size: 28px; font-weight: 600; margin: 2px 0; font-variant-numeric: tabular-nums; }
   .tile .was { color: var(--text-muted); font-size: 12px; }
@@ -109,6 +110,11 @@
   td .was { display: block; color: var(--text-muted); font-size: 11px; }
   tfoot td { font-weight: 600; border-bottom: 0; border-top: 2px solid var(--border); }
   .error { color: var(--bad-text); }
+  .page-title { font-size: 20px; margin: 0 0 12px; }
+  .linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--text-primary); text-decoration: underline;
+    text-decoration-color: var(--border); text-underline-offset: 3px; cursor: pointer; text-align: left; }
+  .linkish:hover { text-decoration-color: currentColor; }
+  .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
   /* view switcher + project picker */
   .tabs { display: flex; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--border); }
   .tabs button {
@@ -148,8 +154,8 @@
   <p class="sub" id="period">Loading&hellip;</p>
 
   <nav class="tabs" role="tablist">
-    <button role="tab" aria-selected="true" data-view="q1">MTD vs last month</button>
-    <button role="tab" aria-selected="false" data-view="q2">UTM breakdown</button>
+    <button role="tab" aria-selected="true" data-view="q1">All projects</button>
+    <button role="tab" aria-selected="false" data-view="q2">Project pages</button>
     <button role="tab" aria-selected="false" data-view="email">Email &amp; SMS</button>
   </nav>
 
@@ -164,7 +170,7 @@
 
   <section class="card">
     <h2>All projects</h2>
-    <p class="note">ROAS = Sales &divide; Spend (your order data); the all-projects ROAS counts only projects with ad data. Platform ROAS = the ad platform's own reported revenue &divide; Spend. Click a column to sort.</p>
+    <p class="note">Click a project name to open its page. ROAS = Sales &divide; Spend (your order data); the all-projects ROAS counts only projects with ad data. Platform ROAS = the ad platform's own reported revenue &divide; Spend. Click a column to sort.</p>
     <div class="scroll"><table id="table"></table></div>
   </section>
   </div>
@@ -174,6 +180,8 @@
       <label for="project">Project</label>
       <select id="project"></select>
     </div>
+    <h2 class="page-title" id="project-title"></h2>
+    <div class="tiles" id="project-tiles"></div>
     <div class="grid2">
       <section class="card">
         <h2>Sales by UTM Source</h2>
@@ -231,15 +239,20 @@
     document.getElementById('period').textContent =
       d.current[0] + ' to ' + d.current[1] + ' vs ' + priorLabel + '. Latest data: ' + d.latest + '.';
 
-    document.getElementById('tiles').innerHTML = d.total ? METRICS.map(function (m) {
-      var v = d.total[m.key];
-      return '<div class="card tile"><div class="label">' + m.label + ', all projects</div>' +
-        '<div class="value">' + m.fmt(v[0]) + '</div>' +
-        delta(v[2], m.good) + ' <span class="was">vs ' + fmtPrior(m.fmt, v[1]) + ' last month</span></div>';
-    }).join('') : '';
+    q1Data = d;
+    document.getElementById('tiles').innerHTML = d.total ? metricTiles(d.total, ', all projects') : '';
 
     renderBars(d.projects);
     renderTable(d);
+  }
+
+  function metricTiles(row, suffix) {
+    return METRICS.map(function (m) {
+      var v = row[m.key];
+      return '<div class="card tile"><div class="label">' + m.label + suffix + '</div>' +
+        '<div class="value">' + m.fmt(v[0]) + '</div>' +
+        delta(v[2], m.good) + ' <span class="was">vs ' + fmtPrior(m.fmt, v[1]) + ' last month</span></div>';
+    }).join('');
   }
 
   function renderBars(projects) {
@@ -272,7 +285,9 @@
 
   var sortState = { col: 1, dir: -1 };
   function renderTable(d) {
-    var cols = [{ label: 'Project', get: function (r) { return r.project; } }];
+    var cols = [{ label: 'Project', get: function (r) { return r.project; }, cell: function (r) {
+      return r.project === 'All projects' ? esc(r.project)
+        : '<button class="linkish" data-project="' + esc(r.project) + '">' + esc(r.project) + '</button>'; } }];
     METRICS.forEach(function (m) {
       cols.push({ label: m.label + ' MTD', get: function (r) { return r[m.key][0]; }, cell: function (r) {
         return m.fmt(r[m.key][0]) + '<span class="was">' + (r[m.key][1] ? 'was ' + m.fmt(r[m.key][1]) : 'no data last month') + '</span>'; } });
@@ -304,15 +319,26 @@
         renderTable(d);
       });
     });
+    t.querySelectorAll('[data-project]').forEach(function (b) {
+      b.addEventListener('click', function () { openProject(b.dataset.project); });
+    });
   }
 
   // ---------- view switching ----------
   var periodText = { q1: 'Loading\u2026', q2: 'Loading\u2026', email: 'Loading\u2026' };
-  var q2Data = null, emailData = null, currentView = 'q1';
+  var q1Data = null, q2Data = null, emailData = null, currentView = 'q1', currentProject = null;
+  // Each page has its own link (?project=SF, ?view=email) via the Apps Script URL API.
+  var hasUrlApi = !!(google.script.url && google.script.history);
+  function pushUrl() {
+    if (!hasUrlApi) return;
+    var params = currentView === 'q2' && currentProject ? { project: currentProject }
+      : currentView === 'email' ? { view: 'email' } : {};
+    google.script.history.push(null, params);
+  }
   function showError(e) {
     document.getElementById('period').innerHTML = '<span class="error">Could not load data: ' + esc(e.message) + '</span>';
   }
-  function setView(v) {
+  function setView(v, noPush) {
     currentView = v;
     document.querySelectorAll('.tabs button').forEach(function (b) {
       b.setAttribute('aria-selected', String(b.dataset.view === v));
@@ -323,10 +349,17 @@
     document.getElementById('period').textContent = periodText[v];
     if (v === 'q2' && !q2Data) {
       google.script.run.withSuccessHandler(renderQ2).withFailureHandler(showError).getQ2();
+    } else if (v === 'q2') {
+      drawProject();
     }
     if (v === 'email' && !emailData) {
       google.script.run.withSuccessHandler(renderEmail).withFailureHandler(showError).getEmail();
     }
+    if (!noPush) pushUrl();
+  }
+  function openProject(name) {
+    currentProject = name;
+    setView('q2');
   }
   document.querySelectorAll('.tabs button').forEach(function (b) {
     b.addEventListener('click', function () { setView(b.dataset.view); });
@@ -368,6 +401,10 @@
   }
 
   function renderDonut(p) {
+    if (!p || !p.sources.length) {
+      document.getElementById('donut').innerHTML = '<p class="empty">No order data for this project this month.</p>';
+      return;
+    }
     var slices = slicesFor(p), total = slices.reduce(function (t, s) { return t + (s.sales || 0); }, 0);
     var size = 220, c = size / 2, r1 = 100, r0 = 64, a = 0, svg = '';
     slices.forEach(function (s, i) {
@@ -407,6 +444,11 @@
   }
 
   function renderTop(p) {
+    if (!p) {
+      document.getElementById('top').innerHTML = '';
+      document.getElementById('top-note').textContent = 'No order data for this project this month.';
+      return;
+    }
     var max = Math.max.apply(null, p.top.map(function (t) { return t.share || 0; }).concat([0.0001]));
     var t = document.getElementById('top');
     t.innerHTML = p.top.length ? '<thead><tr><th>#</th><th style="text-align:left">UTM Content</th><th>Sales</th><th>Orders</th><th>Share of sales</th></tr></thead><tbody>' +
@@ -425,14 +467,30 @@
 
   function renderQ2(d) {
     q2Data = d;
-    periodText.q2 = 'Month to date: ' + d.window[0] + ' to ' + d.window[1] + '.';
-    if (currentView === 'q2') document.getElementById('period').textContent = periodText.q2;
     buildColors(d.projects);
+    drawProject();
+  }
+
+  // One page per project: its MTD tiles (from Q1) plus its UTM breakdown (from Q2).
+  function projectNames() {
+    return q1Data ? q1Data.projects.map(function (p) { return p.project; }) : [];
+  }
+  function drawProject() {
+    var names = projectNames();
+    if (!names.length || !q2Data) return;
+    if (names.indexOf(currentProject) < 0) currentProject = names[0];
     var sel = document.getElementById('project');
-    sel.innerHTML = d.projects.map(function (p, i) { return '<option value="' + i + '">' + esc(p.project) + '</option>'; }).join('');
-    function draw() { var p = d.projects[+sel.value]; if (p) { renderDonut(p); renderTop(p); } }
-    sel.onchange = draw;
-    draw();
+    sel.innerHTML = names.map(function (n) {
+      return '<option' + (n === currentProject ? ' selected' : '') + '>' + esc(n) + '</option>';
+    }).join('');
+    sel.onchange = function () { currentProject = sel.value; drawProject(); pushUrl(); };
+    var q1 = q1Data.projects.filter(function (p) { return p.project === currentProject; })[0];
+    var q2 = q2Data.projects.filter(function (p) { return p.project === currentProject; })[0];
+    document.getElementById('project-title').textContent = currentProject;
+    document.getElementById('project-tiles').innerHTML = q1 ? metricTiles(q1, '') : '';
+    renderDonut(q2); renderTop(q2);
+    periodText.q2 = periodText.q1;
+    if (currentView === 'q2') document.getElementById('period').textContent = periodText.q2;
   }
 
   // ---------- Email & SMS ----------
@@ -488,6 +546,12 @@
     .withSuccessHandler(function (d) {
       render(d);
       periodText.q1 = document.getElementById('period').textContent;
+      if (!hasUrlApi) return;
+      google.script.url.getLocation(function (loc) {
+        var prm = loc.parameter || {};
+        if (prm.project) { currentProject = prm.project; setView('q2', true); }
+        else if (prm.view === 'email') setView('email', true);
+      });
     })
     .withFailureHandler(showError)
     .getQ1();
