@@ -150,6 +150,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-view="q1">MTD vs last month</button>
     <button role="tab" aria-selected="false" data-view="q2">UTM breakdown</button>
+    <button role="tab" aria-selected="false" data-view="email">Email &amp; SMS</button>
   </nav>
 
   <div id="view-q1">
@@ -185,6 +186,15 @@
         <div class="scroll"><table id="top"></table></div>
       </section>
     </div>
+  </div>
+
+  <div id="view-email" hidden>
+    <div class="tiles" id="email-tiles"></div>
+    <section class="card">
+      <h2>Email &amp; SMS sales by funnel</h2>
+      <p class="note">Orders whose UTM Source is an email or SMS platform (simon, attentive, emotive), from any funnel. emotive is SMS. Click a column to sort.</p>
+      <div class="scroll"><table id="email-table"></table></div>
+    </section>
   </div>
 </main>
 <div id="tip" role="tooltip"></div>
@@ -297,8 +307,8 @@
   }
 
   // ---------- view switching ----------
-  var periodText = { q1: 'Loading\u2026', q2: 'Loading\u2026' };
-  var q2Data = null, currentView = 'q1';
+  var periodText = { q1: 'Loading\u2026', q2: 'Loading\u2026', email: 'Loading\u2026' };
+  var q2Data = null, emailData = null, currentView = 'q1';
   function showError(e) {
     document.getElementById('period').innerHTML = '<span class="error">Could not load data: ' + esc(e.message) + '</span>';
   }
@@ -309,9 +319,13 @@
     });
     document.getElementById('view-q1').hidden = v !== 'q1';
     document.getElementById('view-q2').hidden = v !== 'q2';
+    document.getElementById('view-email').hidden = v !== 'email';
     document.getElementById('period').textContent = periodText[v];
     if (v === 'q2' && !q2Data) {
       google.script.run.withSuccessHandler(renderQ2).withFailureHandler(showError).getQ2();
+    }
+    if (v === 'email' && !emailData) {
+      google.script.run.withSuccessHandler(renderEmail).withFailureHandler(showError).getEmail();
     }
   }
   document.querySelectorAll('.tabs button').forEach(function (b) {
@@ -419,6 +433,55 @@
     function draw() { var p = d.projects[+sel.value]; if (p) { renderDonut(p); renderTop(p); } }
     sel.onchange = draw;
     draw();
+  }
+
+  // ---------- Email & SMS ----------
+  var emailSort = { col: 2, dir: -1 };
+  function renderEmail(d) {
+    emailData = d;
+    periodText.email = d.current[0] + ' to ' + d.current[1] + ' vs ' + d.prior[0] + ' to ' + d.prior[1] + '.';
+    if (currentView === 'email') document.getElementById('period').textContent = periodText.email;
+    var tiles = (d.total ? [{ label: 'All email & SMS', r: d.total }] : [])
+      .concat(d.bySource.map(function (r) { return { label: r.source === 'emotive' ? 'emotive (SMS)' : r.source, r: r }; }));
+    document.getElementById('email-tiles').innerHTML = tiles.map(function (t) {
+      return '<div class="card tile"><div class="label">' + esc(t.label) + '</div>' +
+        '<div class="value">' + fmtMoney(t.r.sales[0]) + '</div>' + delta(t.r.sales[2], true) +
+        ' <span class="was">vs ' + fmtPrior(fmtMoney, t.r.sales[1]) + ' last month &middot; ' + (t.r.orders[0] || 0) + ' orders</span></div>';
+    }).join('');
+    renderEmailTable();
+  }
+  function renderEmailTable() {
+    var cols = [
+      { label: 'Funnel', get: function (r) { return r.funnel; }, left: true },
+      { label: 'UTM Source', get: function (r) { return r.source; }, left: true },
+      { label: 'Sales MTD', get: function (r) { return r.sales[0]; }, cell: function (r) {
+        return fmtMoney(r.sales[0]) + '<span class="was">' + (r.sales[1] ? 'was ' + fmtMoney(r.sales[1]) : 'no data last month') + '</span>'; } },
+      { label: 'Sales MoM', get: function (r) { return r.sales[2]; }, cell: function (r) { return delta(r.sales[2], true); } },
+      { label: 'Orders MTD', get: function (r) { return r.orders[0]; } }
+    ];
+    var c = cols[emailSort.col];
+    var rows = emailData.funnels.slice().sort(function (a, b) {
+      var x = c.get(a), y = c.get(b);
+      if (x == null) return 1; if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * emailSort.dir;
+    });
+    function tr(r) {
+      return '<tr>' + cols.map(function (col) {
+        return '<td' + (col.left ? ' style="text-align:left"' : '') + '>' + (col.cell ? col.cell(r) : esc(col.get(r))) + '</td>';
+      }).join('') + '</tr>';
+    }
+    var t = document.getElementById('email-table');
+    t.innerHTML = '<thead><tr>' + cols.map(function (col, i) {
+      var srt = i === emailSort.col ? ' aria-sort="' + (emailSort.dir > 0 ? 'ascending' : 'descending') + '"' : '';
+      return '<th data-i="' + i + '"' + srt + (col.left ? ' style="text-align:left"' : '') + '>' + col.label + '</th>';
+    }).join('') + '</tr></thead><tbody>' + rows.map(tr).join('') + '</tbody>';
+    t.querySelectorAll('th').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var i = +th.dataset.i;
+        emailSort = { col: i, dir: i === emailSort.col ? -emailSort.dir : (cols[i].left ? 1 : -1) };
+        renderEmailTable();
+      });
+    });
   }
 
   google.script.run

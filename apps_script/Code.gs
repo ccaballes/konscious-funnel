@@ -81,3 +81,26 @@ function getQ2() {
   });
   return { window: src.window, projects: order.map(function (n) { return byProject[n]; }) };
 }
+
+const EMAIL_TAB = 'Email MTD';
+const EMAIL_HEADER_ROW = 4;
+
+function getEmail() {
+  const ws = SpreadsheetApp.getActive().getSheetByName(EMAIL_TAB);
+  if (!ws) throw new Error('Tab "' + EMAIL_TAB + '" not found. Run the notebook\'s dashboard cell first.');
+  const windows = ws.getRange('B1:C2').getDisplayValues();
+  const last = ws.getLastRow();
+  const rows = (last > EMAIL_HEADER_ROW
+    ? ws.getRange(EMAIL_HEADER_ROW + 1, 1, last - EMAIL_HEADER_ROW, 7).getValues() : [])
+    .filter(function (r) { return r[0] !== ''; })
+    .map(function (r) {
+      return { funnel: String(r[0]), source: String(r[1]), sales: [num_(r[2]), num_(r[3]), num_(r[4])],
+               orders: [num_(r[5]), num_(r[6])] };
+    });
+  return {
+    current: windows[0], prior: windows[1],
+    funnels: rows.filter(function (r) { return r.funnel !== 'All funnels' && r.funnel !== 'All email & SMS'; }),
+    bySource: rows.filter(function (r) { return r.funnel === 'All funnels'; }),
+    total: rows.filter(function (r) { return r.funnel === 'All email & SMS'; })[0] || null
+  };
+}

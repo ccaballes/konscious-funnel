@@ -12,6 +12,11 @@ section 5 fills that sheet; this code only displays it.
 | `UTM Data` | notebook | One row per project / day / UTM Source / UTM Content: Sales and Orders. Same overwrite-and-keep rule as `Data`. |
 | `Q2 UTM Source` | notebook (values) | Month-to-date sales split by UTM Source, per project. Feeds the pie chart. |
 | `Q2 Top Content` | notebook (values) | Month-to-date top 10 UTM Content per project, plus a "(not tagged)" row for sales with no UTM Content. |
+| `Email Data` | notebook | One row per day / UTM Source / UTM Medium / funnel for orders whose UTM Source is in `EMAIL_UTM_SOURCES` (simon, attentive, emotive), from any funnel. |
+| `Email MTD` | notebook (values) | Email & SMS sales month to date vs the same days last month, per funnel and source, plus totals per source. |
+
+UTM Source is matched ignoring case, and `UTM_SOURCE_ALIASES` in the control
+cell merges spellings (e.g. `simons` -> `simon`).
 
 The Q2 tabs hold values rather than formulas on purpose: UTM Content is often an
 18-digit ad ID, and Sheets formulas round numbers past 15 digits, which would
