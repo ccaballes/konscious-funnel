@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f5f5f3;
+    --surface-1: #fcfcfb;
+    --border: #e2e1dc;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #77766f;
+    --good-text: #006300;
+    --bad-text: #b42323;
+    --up: #2a78d6;
+    --down: #e34948;
+    --neutral: #f0efec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-0: #111110;
+      --surface-1: #1a1a19;
+      --border: #33332f;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #9a998f;
+      --good-text: #3fbf3f;
+      --bad-text: #ee7a7a;
+      --up: #3987e5;
+      --down: #e66767;
+      --neutral: #383835;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0: #111110;
+    --surface-1: #1a1a19;
+    --border: #33332f;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #9a998f;
+    --good-text: #3fbf3f;
+    --bad-text: #ee7a7a;
+    --up: #3987e5;
+    --down: #e66767;
+    --neutral: #383835;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-0); color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 0 0 4px; }
+  .sub { color: var(--text-secondary); margin: 0 0 20px; }
+  .note { color: var(--text-muted); font-size: 12px; margin: 4px 0 12px; }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile .label { color: var(--text-secondary); font-size: 13px; }
+  .tile .value { font-size: 28px; font-weight: 600; margin: 2px 0; font-variant-numeric: tabular-nums; }
+  .tile .was { color: var(--text-muted); font-size: 12px; }
+  .delta { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .delta.good { color: var(--good-text); }
+  .delta.bad { color: var(--bad-text); }
+  .delta.flat { color: var(--text-secondary); }
+  section { margin-bottom: 16px; }
+  /* diverging bars */
+  .bars { display: grid; grid-template-columns: minmax(110px, 160px) 1fr 70px; gap: 6px 10px; align-items: center; margin-top: 12px; }
+  .bars .name { color: var(--text-secondary); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .track { position: relative; height: 18px; }
+  .track::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: 1px solid var(--text-muted); }
+  .bar { position: absolute; top: 2px; height: 14px; }
+  .bar.pos { left: 50%; background: var(--up); border-radius: 0 4px 4px 0; }
+  .bar.neg { right: 50%; background: var(--down); border-radius: 4px 0 0 4px; }
+  .bars .pct { text-align: right; font-size: 13px; }
+  .hit { position: absolute; inset: -3px 0; cursor: default; }
+  #tip {
+    position: fixed; pointer-events: none; z-index: 10; display: none;
+    background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.18);
+  }
+  /* table */
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--text-secondary); font-weight: 600; font-size: 12px; cursor: pointer; user-select: none; }
+  th[aria-sort]::after { content: " \25BE"; }
+  th[aria-sort="ascending"]::after { content: " \25B4"; }
+  td .was { display: block; color: var(--text-muted); font-size: 11px; }
+  tfoot td { font-weight: 600; border-bottom: 0; border-top: 2px solid var(--border); }
+  .error { color: var(--bad-text); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Funnel Dashboard</h1>
+  <p class="sub" id="period">Loading&hellip;</p>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section class="card">
+    <h2>Sales change by project</h2>
+    <p class="note">Month to date vs the same days last month. Blue bars grew, red bars shrank. Hover a bar for the dollar amounts.</p>
+    <div class="bars" id="bars"></div>
+  </section>
+
+  <section class="card">
+    <h2>All projects</h2>
+    <p class="note">ROAS = Sales &divide; Spend (your order data). Platform ROAS = the ad platform's own reported revenue &divide; Spend. Click a column to sort.</p>
+    <div class="scroll"><table id="table"></table></div>
+  </section>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script>
+  var money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  function fmtMoney(v) { return v == null ? 'n/a' : money.format(v); }
+  function fmtRoas(v) { return v == null ? 'n/a' : v.toFixed(2) + 'x'; }
+  function fmtPct(v) { return v == null ? 'n/a' : (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  // higherIsGood: true for Sales/ROAS, null for Spend (direction is neither good nor bad).
+  function delta(v, higherIsGood) {
+    if (v == null) return '<span class="delta flat">n/a</span>';
+    var arrow = v > 0 ? '▲' : v < 0 ? '▼' : '▬';
+    var cls = 'flat';
+    if (higherIsGood !== null && v !== 0) cls = (v > 0) === higherIsGood ? 'good' : 'bad';
+    var word = v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
+    return '<span class="delta ' + cls + '" aria-label="' + word + ' ' + fmtPct(Math.abs(v)) + '">' + arrow + ' ' + fmtPct(v) + '</span>';
+  }
+
+  var METRICS = [
+    { key: 'sales', label: 'Sales', fmt: fmtMoney, good: true },
+    { key: 'spend', label: 'Spend', fmt: fmtMoney, good: null },
+    { key: 'roas', label: 'ROAS', fmt: fmtRoas, good: true },
+    { key: 'platformRoas', label: 'Platform ROAS', fmt: fmtRoas, good: true }
+  ];
+
+  function render(d) {
+    var priorLabel = d.prior[0] + ' to ' + d.prior[1];
+    document.getElementById('period').textContent =
+      d.current[0] + ' to ' + d.current[1] + ' vs ' + priorLabel + '. Latest data: ' + d.latest + '.';
+
+    document.getElementById('tiles').innerHTML = d.total ? METRICS.map(function (m) {
+      var v = d.total[m.key];
+      return '<div class="card tile"><div class="label">' + m.label + ', all projects</div>' +
+        '<div class="value">' + m.fmt(v[0]) + '</div>' +
+        delta(v[2], m.good) + ' <span class="was">vs ' + m.fmt(v[1]) + ' last month</span></div>';
+    }).join('') : '';
+
+    renderBars(d.projects);
+    renderTable(d);
+  }
+
+  function renderBars(projects) {
+    var rows = projects.slice().sort(function (a, b) {
+      return (b.sales[2] == null ? -Infinity : b.sales[2]) - (a.sales[2] == null ? -Infinity : a.sales[2]);
+    });
+    var max = Math.max.apply(null, rows.map(function (r) { return Math.abs(r.sales[2] || 0); }).concat([0.0001]));
+    var tip = document.getElementById('tip');
+    var el = document.getElementById('bars');
+    el.innerHTML = rows.map(function (r, i) {
+      var v = r.sales[2];
+      var w = v == null ? 0 : Math.abs(v) / max * 50;
+      var bar = v == null ? '' : '<div class="bar ' + (v >= 0 ? 'pos' : 'neg') + '" style="width:' + w + '%"></div>';
+      return '<div class="name" title="' + esc(r.project) + '">' + esc(r.project) + '</div>' +
+        '<div class="track">' + bar + '<div class="hit" data-i="' + i + '"></div></div>' +
+        '<div class="pct">' + delta(v, true) + '</div>';
+    }).join('');
+    el.querySelectorAll('.hit').forEach(function (h) {
+      var r = rows[+h.dataset.i];
+      h.addEventListener('mousemove', function (e) {
+        tip.innerHTML = '<b>' + esc(r.project) + '</b><br>This month: ' + fmtMoney(r.sales[0]) +
+          '<br>Last month: ' + fmtMoney(r.sales[1]) + '<br>Change: ' + fmtPct(r.sales[2]);
+        tip.style.display = 'block';
+        var x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+        tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px';
+      });
+      h.addEventListener('mouseleave', function () { tip.style.display = 'none'; });
+    });
+  }
+
+  var sortState = { col: 1, dir: -1 };
+  function renderTable(d) {
+    var cols = [{ label: 'Project', get: function (r) { return r.project; } }];
+    METRICS.forEach(function (m) {
+      cols.push({ label: m.label + ' MTD', get: function (r) { return r[m.key][0]; }, cell: function (r) {
+        return m.fmt(r[m.key][0]) + '<span class="was">was ' + m.fmt(r[m.key][1]) + '</span>'; } });
+      cols.push({ label: m.label + ' MoM', get: function (r) { return r[m.key][2]; }, cell: function (r) {
+        return delta(r[m.key][2], m.good); } });
+    });
+    var c = cols[sortState.col];
+    var rows = d.projects.slice().sort(function (a, b) {
+      var x = c.get(a), y = c.get(b);
+      if (x == null) return 1; if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * sortState.dir;
+    });
+    function tr(r, tag) {
+      return '<tr>' + cols.map(function (col) {
+        return '<' + tag + '>' + (col.cell ? col.cell(r) : esc(col.get(r))) + '</' + tag + '>';
+      }).join('') + '</tr>';
+    }
+    var head = '<thead><tr>' + cols.map(function (col, i) {
+      var s = i === sortState.col ? ' aria-sort="' + (sortState.dir > 0 ? 'ascending' : 'descending') + '"' : '';
+      return '<th data-i="' + i + '"' + s + '>' + col.label + '</th>';
+    }).join('') + '</tr></thead>';
+    var t = document.getElementById('table');
+    t.innerHTML = head + '<tbody>' + rows.map(function (r) { return tr(r, 'td'); }).join('') + '</tbody>' +
+      (d.total ? '<tfoot>' + tr(d.total, 'td') + '</tfoot>' : '');
+    t.querySelectorAll('th').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var i = +th.dataset.i;
+        sortState = { col: i, dir: i === sortState.col ? -sortState.dir : (i === 0 ? 1 : -1) };
+        renderTable(d);
+      });
+    });
+  }
+
+  google.script.run
+    .withSuccessHandler(render)
+    .withFailureHandler(function (e) {
+      document.getElementById('period').innerHTML = '<span class="error">Could not load data: ' + esc(e.message) + '</span>';
+    })
+    .getQ1();
+</script>
+</body>
+</html>
