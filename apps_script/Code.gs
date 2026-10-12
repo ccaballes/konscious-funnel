@@ -44,3 +44,40 @@ function getQ1() {
     total: rows.filter(function (r) { return r.project === 'All projects'; })[0] || null
   };
 }
+
+const Q2_SOURCE_TAB = 'Q2 UTM Source';
+const Q2_CONTENT_TAB = 'Q2 Top Content';
+const Q2_HEADER_ROW = 3;
+
+function q2Rows_(name, cols) {
+  const ws = SpreadsheetApp.getActive().getSheetByName(name);
+  if (!ws) throw new Error('Tab "' + name + '" not found. Run the notebook\'s dashboard cell first.');
+  const last = ws.getLastRow();
+  return {
+    window: ws.getRange('B1:C1').getDisplayValues()[0],
+    rows: last > Q2_HEADER_ROW
+      ? ws.getRange(Q2_HEADER_ROW + 1, 1, last - Q2_HEADER_ROW, cols).getValues()
+          .filter(function (r) { return r[0] !== ''; })
+      : []
+  };
+}
+
+function getQ2() {
+  const src = q2Rows_(Q2_SOURCE_TAB, 5);
+  const cnt = q2Rows_(Q2_CONTENT_TAB, 6);
+  const byProject = {};
+  const order = [];
+  function proj(n) {
+    if (!byProject[n]) { byProject[n] = { project: n, sources: [], top: [], untagged: null }; order.push(n); }
+    return byProject[n];
+  }
+  src.rows.forEach(function (r) {
+    proj(String(r[0])).sources.push({ source: String(r[1]), sales: num_(r[2]), orders: num_(r[3]), share: num_(r[4]) });
+  });
+  cnt.rows.forEach(function (r) {
+    const item = { rank: num_(r[1]), content: String(r[2]), sales: num_(r[3]), orders: num_(r[4]), share: num_(r[5]) };
+    if (item.rank === null) proj(String(r[0])).untagged = item;
+    else proj(String(r[0])).top.push(item);
+  });
+  return { window: src.window, projects: order.map(function (n) { return byProject[n]; }) };
+}

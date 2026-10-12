@@ -17,6 +17,11 @@
     --up: #2a78d6;
     --down: #e34948;
     --neutral: #f0efec;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --other: #5f5e58;
+    --untagged: #d3d2cc;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -32,6 +37,11 @@
       --up: #3987e5;
       --down: #e66767;
       --neutral: #383835;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --other: #b0afa6;
+      --untagged: #55554f;
     }
   }
   :root[data-theme="dark"] {
@@ -47,6 +57,11 @@
     --up: #3987e5;
     --down: #e66767;
     --neutral: #383835;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --other: #b0afa6;
+    --untagged: #55554f;
   }
   * { box-sizing: border-box; }
   body {
@@ -94,6 +109,37 @@
   td .was { display: block; color: var(--text-muted); font-size: 11px; }
   tfoot td { font-weight: 600; border-bottom: 0; border-top: 2px solid var(--border); }
   .error { color: var(--bad-text); }
+  /* view switcher + project picker */
+  .tabs { display: flex; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--border); }
+  .tabs button {
+    background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    padding: 8px 12px; font: inherit; color: var(--text-secondary); cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--text-primary); font-weight: 600; }
+  .filters { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  select {
+    font: inherit; color: var(--text-primary); background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+  }
+  .grid2 { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 16px; }
+  .grid2 > * { min-width: 0; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  /* donut */
+  .donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 12px; }
+  .donut path, .donut circle.slice { stroke: var(--surface-1); stroke-width: 2; }
+  .donut text { pointer-events: none; }
+  .donut .center-big { font-size: 22px; font-weight: 600; fill: var(--text-primary); }
+  .donut .center-small { font-size: 12px; fill: var(--text-secondary); }
+  .legend { list-style: none; padding: 0; margin: 0; width: 100%; }
+  .legend li { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 8px; align-items: center; padding: 4px 0; font-size: 13px; }
+  .legend .sw { width: 12px; height: 12px; border-radius: 3px; }
+  .legend .v { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .legend .p { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
+  /* top content */
+  td.content { max-width: 340px; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+  .share { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .share .track2 { width: 80px; height: 8px; background: var(--neutral); border-radius: 4px; overflow: hidden; }
+  .share .fill { height: 100%; background: var(--series-1); border-radius: 0 4px 4px 0; }
 </style>
 </head>
 <body>
@@ -101,6 +147,12 @@
   <h1>Funnel Dashboard</h1>
   <p class="sub" id="period">Loading&hellip;</p>
 
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-view="q1">MTD vs last month</button>
+    <button role="tab" aria-selected="false" data-view="q2">UTM breakdown</button>
+  </nav>
+
+  <div id="view-q1">
   <div class="tiles" id="tiles"></div>
 
   <section class="card">
@@ -111,9 +163,29 @@
 
   <section class="card">
     <h2>All projects</h2>
-    <p class="note">ROAS = Sales &divide; Spend (your order data). Platform ROAS = the ad platform's own reported revenue &divide; Spend. Click a column to sort.</p>
+    <p class="note">ROAS = Sales &divide; Spend (your order data); the all-projects ROAS counts only projects with ad data. Platform ROAS = the ad platform's own reported revenue &divide; Spend. Click a column to sort.</p>
     <div class="scroll"><table id="table"></table></div>
   </section>
+  </div>
+
+  <div id="view-q2" hidden>
+    <div class="filters">
+      <label for="project">Project</label>
+      <select id="project"></select>
+    </div>
+    <div class="grid2">
+      <section class="card">
+        <h2>Sales by UTM Source</h2>
+        <p class="note">Share of this project's month-to-date sales.</p>
+        <div class="donut-wrap" id="donut"></div>
+      </section>
+      <section class="card">
+        <h2>Top 10 UTM Content</h2>
+        <p class="note" id="top-note">Ranked by month-to-date sales.</p>
+        <div class="scroll"><table id="top"></table></div>
+      </section>
+    </div>
+  </div>
 </main>
 <div id="tip" role="tooltip"></div>
 
@@ -121,6 +193,9 @@
   var money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
   function fmtMoney(v) { return v == null ? 'n/a' : money.format(v); }
   function fmtRoas(v) { return v == null ? 'n/a' : v.toFixed(2) + 'x'; }
+  // A Spend of 0 means no ad file was loaded for that project/window.
+  function fmtSpend(v) { return v === 0 ? 'no ad data' : fmtMoney(v); }
+  function fmtPrior(fmt, v) { return v === 0 || v == null ? 'no data' : fmt(v); }
   function fmtPct(v) { return v == null ? 'n/a' : (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%'; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
@@ -136,7 +211,7 @@
 
   var METRICS = [
     { key: 'sales', label: 'Sales', fmt: fmtMoney, good: true },
-    { key: 'spend', label: 'Spend', fmt: fmtMoney, good: null },
+    { key: 'spend', label: 'Spend', fmt: fmtSpend, good: null },
     { key: 'roas', label: 'ROAS', fmt: fmtRoas, good: true },
     { key: 'platformRoas', label: 'Platform ROAS', fmt: fmtRoas, good: true }
   ];
@@ -150,7 +225,7 @@
       var v = d.total[m.key];
       return '<div class="card tile"><div class="label">' + m.label + ', all projects</div>' +
         '<div class="value">' + m.fmt(v[0]) + '</div>' +
-        delta(v[2], m.good) + ' <span class="was">vs ' + m.fmt(v[1]) + ' last month</span></div>';
+        delta(v[2], m.good) + ' <span class="was">vs ' + fmtPrior(m.fmt, v[1]) + ' last month</span></div>';
     }).join('') : '';
 
     renderBars(d.projects);
@@ -190,7 +265,7 @@
     var cols = [{ label: 'Project', get: function (r) { return r.project; } }];
     METRICS.forEach(function (m) {
       cols.push({ label: m.label + ' MTD', get: function (r) { return r[m.key][0]; }, cell: function (r) {
-        return m.fmt(r[m.key][0]) + '<span class="was">was ' + m.fmt(r[m.key][1]) + '</span>'; } });
+        return m.fmt(r[m.key][0]) + '<span class="was">' + (r[m.key][1] ? 'was ' + m.fmt(r[m.key][1]) : 'no data last month') + '</span>'; } });
       cols.push({ label: m.label + ' MoM', get: function (r) { return r[m.key][2]; }, cell: function (r) {
         return delta(r[m.key][2], m.good); } });
     });
@@ -221,11 +296,137 @@
     });
   }
 
+  // ---------- view switching ----------
+  var periodText = { q1: 'Loading\u2026', q2: 'Loading\u2026' };
+  var q2Data = null, currentView = 'q1';
+  function showError(e) {
+    document.getElementById('period').innerHTML = '<span class="error">Could not load data: ' + esc(e.message) + '</span>';
+  }
+  function setView(v) {
+    currentView = v;
+    document.querySelectorAll('.tabs button').forEach(function (b) {
+      b.setAttribute('aria-selected', String(b.dataset.view === v));
+    });
+    document.getElementById('view-q1').hidden = v !== 'q1';
+    document.getElementById('view-q2').hidden = v !== 'q2';
+    document.getElementById('period').textContent = periodText[v];
+    if (v === 'q2' && !q2Data) {
+      google.script.run.withSuccessHandler(renderQ2).withFailureHandler(showError).getQ2();
+    }
+  }
+  document.querySelectorAll('.tabs button').forEach(function (b) {
+    b.addEventListener('click', function () { setView(b.dataset.view); });
+  });
+
+  // ---------- Q2: UTM breakdown ----------
+  // Colors follow the source name, not its rank: the three biggest sources across
+  // all projects get fixed slots, everything else folds into "Other".
+  var UNTAGGED = '(not tagged)';
+  var SLOTS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)'];
+  var sourceColor = {};
+  function buildColors(projects) {
+    var tot = {};
+    projects.forEach(function (p) { p.sources.forEach(function (s) {
+      if (s.source !== UNTAGGED) tot[s.source] = (tot[s.source] || 0) + (s.sales || 0);
+    }); });
+    Object.keys(tot).sort(function (a, b) { return tot[b] - tot[a]; }).slice(0, SLOTS.length)
+      .forEach(function (name, i) { sourceColor[name] = SLOTS[i]; });
+  }
+  function slicesFor(p) {
+    var named = [], other = { label: 'Other', sales: 0, orders: 0, share: 0, color: 'var(--other)', members: [] }, untagged = null;
+    p.sources.forEach(function (s) {
+      if (s.source === UNTAGGED) untagged = { label: 'Not tagged', sales: s.sales, orders: s.orders, share: s.share, color: 'var(--untagged)' };
+      else if (sourceColor[s.source]) named.push({ label: s.source, sales: s.sales, orders: s.orders, share: s.share, color: sourceColor[s.source] });
+      else { other.sales += s.sales || 0; other.orders += s.orders || 0; other.share += s.share || 0; other.members.push(s.source); }
+    });
+    var out = named.sort(function (a, b) { return b.sales - a.sales; });
+    if (other.members.length) out.push(other);
+    if (untagged) out.push(untagged);
+    return out;
+  }
+
+  function arcPath(cx, cy, r0, r1, a0, a1) {
+    var large = a1 - a0 > Math.PI ? 1 : 0;
+    function pt(r, a) { return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; }
+    var p0 = pt(r1, a0), p1 = pt(r1, a1), p2 = pt(r0, a1), p3 = pt(r0, a0);
+    return 'M' + p0 + 'A' + r1 + ',' + r1 + ' 0 ' + large + ' 1 ' + p1 + 'L' + p2 +
+      'A' + r0 + ',' + r0 + ' 0 ' + large + ' 0 ' + p3 + 'Z';
+  }
+
+  function renderDonut(p) {
+    var slices = slicesFor(p), total = slices.reduce(function (t, s) { return t + (s.sales || 0); }, 0);
+    var size = 220, c = size / 2, r1 = 100, r0 = 64, a = 0, svg = '';
+    slices.forEach(function (s, i) {
+      var frac = total ? (s.sales || 0) / total : 0;
+      if (frac <= 0) return;
+      if (frac >= 0.9999) {
+        svg += '<circle class="slice" data-i="' + i + '" cx="' + c + '" cy="' + c + '" r="' + ((r0 + r1) / 2) +
+          '" fill="none" style="stroke:' + s.color + ';stroke-width:' + (r1 - r0) + '"></circle>';
+      } else {
+        svg += '<path data-i="' + i + '" d="' + arcPath(c, c, r0, r1, a, a + frac * 2 * Math.PI) + '" style="fill:' + s.color + '"></path>';
+      }
+      a += frac * 2 * Math.PI;
+    });
+    var top = slices.reduce(function (m, s) { return !m || (s.sales || 0) > (m.sales || 0) ? s : m; }, null);
+    var center = top ? '<text class="center-big" x="' + c + '" y="' + (c + 2) + '" text-anchor="middle">' + fmtPct(top.share).replace('+', '') +
+      '</text><text class="center-small" x="' + c + '" y="' + (c + 22) + '" text-anchor="middle">' + esc(top.label) + '</text>' : '';
+    var legend = '<ul class="legend">' + slices.map(function (s) {
+      var name = s.members && s.members.length ? 'Other (' + s.members.map(esc).join(', ') + ')' : esc(s.label);
+      return '<li><span class="sw" style="background:' + s.color + '"></span><span>' + name + '</span>' +
+        '<span class="v">' + fmtMoney(s.sales) + '</span><span class="p">' + fmtPct(s.share).replace('+', '') + '</span></li>';
+    }).join('') + '</ul>';
+    var el = document.getElementById('donut');
+    el.innerHTML = '<svg class="donut" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size +
+      '" role="img" aria-label="Sales by UTM Source">' + svg + center + '</svg>' + legend;
+    var tip = document.getElementById('tip');
+    el.querySelectorAll('[data-i]').forEach(function (node) {
+      var s = slices[+node.dataset.i];
+      node.addEventListener('mousemove', function (e) {
+        tip.innerHTML = '<b>' + esc(s.label) + '</b><br>Sales: ' + fmtMoney(s.sales) + '<br>Orders: ' + (s.orders == null ? 'n/a' : s.orders) +
+          '<br>Share: ' + fmtPct(s.share).replace('+', '');
+        tip.style.display = 'block';
+        tip.style.left = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8) + 'px';
+        tip.style.top = (e.clientY + 14) + 'px';
+      });
+      node.addEventListener('mouseleave', function () { tip.style.display = 'none'; });
+    });
+  }
+
+  function renderTop(p) {
+    var max = Math.max.apply(null, p.top.map(function (t) { return t.share || 0; }).concat([0.0001]));
+    var t = document.getElementById('top');
+    t.innerHTML = p.top.length ? '<thead><tr><th>#</th><th style="text-align:left">UTM Content</th><th>Sales</th><th>Orders</th><th>Share of sales</th></tr></thead><tbody>' +
+      p.top.map(function (r) {
+        return '<tr><td>' + r.rank + '</td><td class="content" style="text-align:left" title="' + esc(r.content) + '">' + esc(r.content) + '</td>' +
+          '<td>' + fmtMoney(r.sales) + '</td><td>' + (r.orders == null ? 'n/a' : r.orders) + '</td>' +
+          '<td><div class="share"><span>' + fmtPct(r.share).replace('+', '') + '</span><span class="track2"><span class="fill" style="display:block;width:' +
+          ((r.share || 0) / max * 100) + '%"></span></span></div></td></tr>';
+      }).join('') + '</tbody>'
+      : '<tbody><tr><td style="text-align:left">No UTM Content on this project\'s sales this month.</td></tr></tbody>';
+    var covered = p.top.reduce(function (s, r) { return s + (r.share || 0); }, 0);
+    document.getElementById('top-note').textContent = 'Ranked by month-to-date sales. These ' + p.top.length + ' cover ' +
+      fmtPct(covered).replace('+', '') + ' of sales' + (p.untagged ? '; ' + fmtPct(p.untagged.share).replace('+', '') +
+      ' of sales (' + fmtMoney(p.untagged.sales) + ') has no UTM Content.' : '.');
+  }
+
+  function renderQ2(d) {
+    q2Data = d;
+    periodText.q2 = 'Month to date: ' + d.window[0] + ' to ' + d.window[1] + '.';
+    if (currentView === 'q2') document.getElementById('period').textContent = periodText.q2;
+    buildColors(d.projects);
+    var sel = document.getElementById('project');
+    sel.innerHTML = d.projects.map(function (p, i) { return '<option value="' + i + '">' + esc(p.project) + '</option>'; }).join('');
+    function draw() { var p = d.projects[+sel.value]; if (p) { renderDonut(p); renderTop(p); } }
+    sel.onchange = draw;
+    draw();
+  }
+
   google.script.run
-    .withSuccessHandler(render)
-    .withFailureHandler(function (e) {
-      document.getElementById('period').innerHTML = '<span class="error">Could not load data: ' + esc(e.message) + '</span>';
+    .withSuccessHandler(function (d) {
+      render(d);
+      periodText.q1 = document.getElementById('period').textContent;
     })
+    .withFailureHandler(showError)
     .getQ1();
 </script>
 </body>
