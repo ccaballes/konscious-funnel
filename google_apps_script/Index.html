@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,300;6..12,400;6..12,600;6..12,700&display=swap">
+<style>
+  /* Layout: fixed side menu + content; a hero chart card beside a 2x2 of KPI cards, then detail cards.
+     Single dark theme on purpose (matches the reference design). Every color is a token here:
+     swap these values for the brand palette and nothing else changes. */
+  :root {
+    color-scheme: dark;
+    --surface-0: #171932;      /* page */
+    --panel: #1d1f3e;          /* side menu */
+    --surface-1: #222449;      /* cards */
+    --surface-2: #2b2d58;      /* hover / active */
+    --border: #303263;
+    --text-primary: #eceefa;
+    --text-secondary: #b3b5d6;
+    --text-muted: #8a8cb3;
+    --now: #a6a9ee;            /* this period (lavender) */
+    --prev: #cfe4fb;           /* comparison period (light blue) */
+    --accent: #8c90f2;
+    --good-text: #5fd39a;
+    --bad-text: #ff8a94;
+    --series-1: #7b7ff0;
+    --series-2: #d9772e;
+    --series-3: #1f9e7d;
+    --other: #8a8cb3;
+    --untagged: #3d3f73;
+    --neutral: #33356a;
+    --font: "Nunito Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--surface-0); color: var(--text-primary); font: 14px/1.45 var(--font); }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .app { display: grid; grid-template-columns: 232px minmax(0, 1fr); align-items: start; }
+  .side { position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; overflow-y: auto;
+    background: var(--panel); padding-block: 18px 24px; padding-inline: 14px; border-right: 1px solid var(--border); }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; padding: 0 8px 18px; }
+  .brand .mark { display: inline-grid; grid-template-columns: 8px 18px; gap: 3px; }
+  .brand .mark i { height: 14px; border-radius: 2px; background: var(--prev); }
+  .brand .mark i + i { background: var(--now); }
+  .menu-btn { display: none; margin-left: auto; background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 4px 12px; cursor: pointer; }
+  .nav-label { color: var(--text-muted); font-size: 12px; margin: 14px 8px 6px; }
+  .nav-item { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 8px;
+    padding: 7px 10px; color: var(--text-secondary); cursor: pointer; }
+  .nav-item:hover { background: var(--surface-1); color: var(--text-primary); }
+  .nav-item[aria-current="page"] { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+  .nav-group { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .nav-group .chev { width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg); transition: transform .15s; flex: none; margin-right: 4px; }
+  .nav-group[aria-expanded="true"] .chev { transform: rotate(45deg); }
+  .nav-group.has-current { color: var(--text-primary); }
+  .nav-sub { padding-left: 12px; margin: 2px 0 6px; }
+  .nav-sub .nav-item { font-size: 13px; padding: 6px 10px; }
+  .chip { display: inline-block; font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 999px; padding: 1px 10px; margin-left: 10px; vertical-align: 3px; }
+
+  .main { padding-block: 20px 48px; padding-inline: 24px; min-width: 0; }
+  .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { font-size: 22px; font-weight: 700; margin: 0; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  .sub { color: var(--text-secondary); margin: 2px 0 0; }
+  .note { color: var(--text-muted); font-size: 12px; margin: 4px 0 10px; }
+  .card { background: var(--surface-1); border-radius: 6px; padding: 18px; min-width: 0; }
+  section, .stack > * { min-width: 0; }
+  .error { color: var(--bad-text); }
+  .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
+
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex: none; }
+  .seg button { background: var(--surface-1); color: var(--text-secondary); border: 0; padding: 5px 12px; font-size: 12px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--text-primary); font-weight: 700; }
+
+  /* KPI area: hero chart + 2x2 small cards */
+  .kpi-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
+  .hero { grid-row: span 2; display: flex; flex-direction: column; }
+  .big { font-size: 34px; font-weight: 300; line-height: 1.1; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .kpi .big { font-size: 26px; }
+  .kpi-label { font-weight: 700; margin: 2px 0 6px; }
+  .caption { color: var(--text-muted); font-size: 12px; }
+  .delta { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .delta.good { color: var(--good-text); }
+  .delta.bad { color: var(--bad-text); }
+  .delta.flat { color: var(--text-secondary); }
+  .head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); margin: 10px 0 4px; }
+  .legend .key { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .sw { width: 10px; height: 10px; border-radius: 50%; }
+  .charts2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+  .grid2 { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 16px; margin-bottom: 16px; }
+  .grid2 > * { min-width: 0; }
+  .stack { display: grid; gap: 16px; margin-bottom: 16px; }
+  .charts3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; margin-bottom: 16px; }
+  .charts3 > * { min-width: 0; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 16px; margin-bottom: 16px; }
+
+  /* charts */
+  .ac { position: relative; }
+  .ac svg { display: block; overflow: visible; }
+  .ac .grid line { stroke: var(--border); stroke-width: 1; }
+  .ac .axis text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .ac .area-now { fill: var(--now); opacity: .55; }
+  .ac .area-prev { fill: var(--prev); opacity: .1; }
+  .ac .line-now { fill: none; stroke: var(--now); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .ac .line-part { fill: none; stroke: var(--now); stroke-width: 2; stroke-dasharray: 2 3; stroke-linecap: round; }
+  .ac .line-prev { fill: none; stroke: var(--prev); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .ac .ref { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 2 3; }
+  .ac .ref-label, .ac .end-label { paint-order: stroke; stroke: var(--surface-1); stroke-width: 4px; stroke-linejoin: round; }
+  .ac .ref-label { fill: var(--text-secondary); font-size: 11px; }
+  .ac .end { fill: var(--now); stroke: var(--surface-1); stroke-width: 2; }
+  .ac .end-label { fill: var(--text-primary); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ac .cross { stroke: var(--text-muted); stroke-width: 1; }
+  .ac .dot-now { fill: var(--now); stroke: var(--surface-1); stroke-width: 2; }
+  .ac .dot-prev { fill: var(--prev); stroke: var(--surface-1); stroke-width: 2; }
+  #tip { position: fixed; pointer-events: none; z-index: 10; display: none; background: var(--surface-2); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.35); max-width: 260px; }
+
+  /* diverging bars */
+  .bars { display: grid; grid-template-columns: minmax(110px, 160px) 1fr 76px; gap: 6px 10px; align-items: center; margin-top: 12px; }
+  .bars .name { color: var(--text-secondary); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .track { position: relative; height: 18px; }
+  .track::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: 1px solid var(--text-muted); }
+  .bar { position: absolute; top: 2px; height: 14px; }
+  .bar.pos { left: 50%; background: var(--now); border-radius: 0 4px 4px 0; }
+  .bar.neg { right: 50%; background: var(--bad-text); border-radius: 4px 0 0 4px; }
+  .bars .pct { text-align: right; font-size: 13px; }
+  .hit { position: absolute; inset: -3px 0; }
+
+  /* tables */
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--text-muted); font-weight: 600; font-size: 12px; cursor: pointer; user-select: none; }
+  th[aria-sort]::after { content: " \25BE"; }
+  th[aria-sort="ascending"]::after { content: " \25B4"; }
+  td .was { display: block; color: var(--text-muted); font-size: 11px; }
+  tfoot td { font-weight: 700; border-bottom: 0; border-top: 2px solid var(--border); }
+  td.content { max-width: 340px; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+  td.content.wrap { white-space: normal; max-width: none; min-width: 240px; overflow-wrap: anywhere; }
+  .share { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .share .track2 { width: 80px; height: 8px; background: var(--neutral); border-radius: 4px; overflow: hidden; }
+  .share .fill { display: block; height: 100%; background: var(--now); border-radius: 0 4px 4px 0; }
+  .linkish { background: none; border: 0; padding: 0; color: var(--text-primary); text-decoration: underline;
+    text-decoration-color: var(--border); text-underline-offset: 3px; cursor: pointer; text-align: left; }
+  .linkish:hover { text-decoration-color: currentColor; }
+
+  /* donut */
+  .donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 12px; }
+  .donut path, .donut circle.slice { stroke: var(--surface-1); stroke-width: 2; }
+  .donut text { pointer-events: none; }
+  .donut .center-big { font-size: 22px; font-weight: 700; fill: var(--text-primary); }
+  .donut .center-small { font-size: 12px; fill: var(--text-secondary); }
+  .dlegend { list-style: none; padding: 0; margin: 0; width: 100%; }
+  .dlegend li { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 8px; align-items: center; padding: 4px 0; font-size: 13px; }
+  .dlegend .sw { width: 12px; height: 12px; border-radius: 3px; }
+  .dlegend .v { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .dlegend .p { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
+
+  @media (max-width: 1100px) {
+    .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hero { grid-column: 1 / -1; grid-row: auto; }
+  }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .side { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); padding-block: 12px; }
+    .brand { padding-bottom: 0; }
+    .menu-btn { display: inline-block; }
+    .side:not(.open) #nav { display: none; }
+    .main { padding-inline: 16px; }
+    .charts2, .grid2 { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 480px) {
+    .kpi-grid { gap: 10px; }
+    .card { padding: 14px; }
+    .kpi .big { font-size: 20px; }
+    .big { font-size: 28px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i></span>Funnel Dashboard
+      <button class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="nav">Menu</button></div>
+    <nav id="nav" aria-label="Pages">
+      <p class="nav-label">Navigation</p>
+      <button class="nav-item" data-go="all">All projects</button>
+      <button class="nav-item" data-go="email">Email &amp; SMS</button>
+      <p class="nav-label">Brands</p>
+      <div id="nav-projects"></div>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="top">
+      <div>
+        <h1 id="page-title">All projects</h1>
+        <p class="sub" id="period">Loading&hellip;</p>
+      </div>
+      <div class="seg" id="period-seg" role="group" aria-label="Chart period">
+        <button type="button" data-period="daily" aria-pressed="true">Daily</button>
+        <button type="button" data-period="monthly" aria-pressed="false">Monthly</button>
+        <button type="button" data-period="quarterly" aria-pressed="false">Quarterly</button>
+        <button type="button" data-period="yearly" aria-pressed="false">Yearly</button>
+      </div>
+    </header>
+
+    <div id="metrics">
+      <div class="kpi-grid">
+        <article class="card hero" id="hero"></article>
+        <article class="card kpi" id="kpi-orders"></article>
+        <article class="card kpi" id="kpi-spend"></article>
+        <article class="card kpi" id="kpi-roas"></article>
+        <article class="card kpi" id="kpi-proas"></article>
+      </div>
+      <div class="charts2">
+        <article class="card" id="chart-orders"></article>
+        <article class="card" id="chart-roas"></article>
+      </div>
+    </div>
+
+    <div id="view-all">
+      <section class="card" style="margin-bottom:16px">
+        <h2>Sales change by project</h2>
+        <p class="note">Month to date vs the same days last month. Lavender bars grew, coral bars shrank. Hover a bar for the dollar amounts.</p>
+        <div class="bars" id="bars"></div>
+      </section>
+      <section class="card">
+        <h2>All projects</h2>
+        <p class="note">Month to date. Click a project name to open its page. ROAS = Sales &divide; Spend (your order data); the all-projects ROAS counts only projects with ad data. Platform ROAS = the ad platform's own reported revenue &divide; Spend. Click a column to sort.</p>
+        <div class="scroll"><table id="table"></table></div>
+      </section>
+    </div>
+
+    <div id="view-project" hidden>
+      <div class="grid2">
+        <section class="card">
+          <h2>Sales by UTM Source</h2>
+          <p class="note">Share of this project's month-to-date sales.</p>
+          <div class="donut-wrap" id="donut"></div>
+        </section>
+        <section class="card">
+          <h2>Top 10 UTM Content</h2>
+          <p class="note" id="top-note">Ranked by month-to-date sales.</p>
+          <div class="scroll"><table id="top"></table></div>
+        </section>
+      </div>
+    </div>
+
+    <div id="view-email" hidden>
+      <div class="kpi-grid" id="email-kpis">
+        <article class="card hero" id="email-hero"></article>
+      </div>
+      <div class="charts3" id="email-charts"></div>
+      <div class="stack" id="email-top"></div>
+      <section class="card">
+        <h2>Email &amp; SMS sales by funnel</h2>
+        <p class="note">Orders whose UTM Source is an email or SMS platform (simon, attentive, emotive), from any funnel. emotive is SMS. Click a column to sort.</p>
+        <div class="scroll"><table id="email-table"></table></div>
+      </section>
+    </div>
+  </main>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+  // ---------- formatting ----------
+  var money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  var count = new Intl.NumberFormat('en-US');
+  function fmtMoney(v) { return v == null ? 'n/a' : money.format(v); }
+  function fmtCount(v) { return v == null ? 'n/a' : count.format(Math.round(v)); }
+  function fmtRoas(v) { return v == null ? 'n/a' : v.toFixed(2) + 'x'; }
+  // A Spend of 0 means no ad file was loaded for that project/window.
+  function fmtSpend(v) { return v === 0 ? 'no ad data' : fmtMoney(v); }
+  function fmtPct(v) { return v == null ? 'n/a' : (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  // higherIsGood: true for Sales/Orders/ROAS, null for Spend (direction is neither good nor bad).
+  function delta(v, higherIsGood) {
+    if (v == null) return '<span class="delta flat">n/a</span>';
+    var arrow = v > 0 ? '↑' : v < 0 ? '↓' : '–';
+    var cls = 'flat';
+    if (higherIsGood !== null && v !== 0) cls = (v > 0) === higherIsGood ? 'good' : 'bad';
+    return '<span class="delta ' + cls + '" aria-label="' + (v > 0 ? 'up ' : v < 0 ? 'down ' : 'flat ') + fmtPct(Math.abs(v)) + '">' + arrow + ' ' + fmtPct(v).replace('-', '') + '</span>';
+  }
+  var tip = document.getElementById('tip');
+  function showTip(e, html) {
+    tip.innerHTML = html; tip.style.display = 'block';
+    tip.style.left = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8) + 'px';
+    tip.style.top = Math.min(e.clientY + 14, window.innerHeight - tip.offsetHeight - 8) + 'px';
+  }
+  function hideTip() { tip.style.display = 'none'; }
+
+  // ---------- state ----------
+  var q1Data = null, q2Data = null, emailData = null, trends = null, emailTrends = null;
+  var view = 'all', currentProject = null, period = 'daily';
+  var mode = { sales: 'each', orders: 'each', roas: 'each', email: 'each' };
+  var hasUrlApi = !!(google.script.url && google.script.history);
+
+  function showError(e) {
+    document.getElementById('period').innerHTML = '<span class="error">Could not load data: ' + esc(e.message) + '</span>';
+  }
+  function pushUrl() {
+    if (!hasUrlApi) return;
+    google.script.history.push(null, view === 'project' && currentProject ? { project: currentProject }
+      : view === 'email' ? { view: 'email' } : {});
+  }
+
+  // ---------- navigation ----------
+  // Brand and platform per project from the notebook's Projects tab; name-based fallback otherwise.
+  var PLATFORM_ORDER = ['Facebook', 'Google'];
+  function metaOf(name) {
+    var m = (q1Data.meta || {})[name];
+    if (m) return m;
+    var g = /-Google$/i.test(name) ? 'Google' : /-FB$/i.test(name) ? 'Facebook' : 'Other';
+    return { brand: name.replace(/-(FB|Google)$/i, ''), platform: g };
+  }
+  var openGroups = {};
+  function buildNav() {
+    var groups = {};
+    q1Data.projects.forEach(function (p) {
+      var m = metaOf(p.project);
+      (groups[m.brand] = groups[m.brand] || []).push({ project: p.project, platform: m.platform });
+    });
+    var rank = function (pl) { var i = PLATFORM_ORDER.indexOf(pl); return i < 0 ? 99 : i; };
+    document.getElementById('nav-projects').innerHTML = Object.keys(groups).sort(function (a, b) { return a.localeCompare(b); }).map(function (brand, gi) {
+      var items = groups[brand].sort(function (a, b) { return rank(a.platform) - rank(b.platform) || a.platform.localeCompare(b.platform); });
+      return '<button class="nav-item nav-group" data-brand="' + esc(brand) + '" aria-expanded="false" aria-controls="grp-' + gi + '">' +
+        '<span>' + esc(brand) + '</span><span class="chev" aria-hidden="true"></span></button>' +
+        '<div class="nav-sub" id="grp-' + gi + '" hidden>' + items.map(function (it) {
+          return '<button class="nav-item" data-go="project" data-project="' + esc(it.project) + '">' + esc(it.platform) + '</button>';
+        }).join('') + '</div>';
+    }).join('');
+    document.querySelectorAll('#nav .nav-group').forEach(function (b) {
+      b.addEventListener('click', function () {
+        openGroups[b.dataset.brand] = b.getAttribute('aria-expanded') !== 'true';
+        markNav();
+      });
+    });
+    document.querySelectorAll('#nav .nav-item[data-go]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (b.dataset.go === 'project') openProject(b.dataset.project); else setView(b.dataset.go);
+        document.getElementById('side').classList.remove('open');
+        document.getElementById('menu-btn').setAttribute('aria-expanded', 'false');
+      });
+    });
+    markNav();
+  }
+  function markNav() {
+    document.querySelectorAll('#nav .nav-item[data-go]').forEach(function (b) {
+      var on = b.dataset.go === view && (view !== 'project' || b.dataset.project === currentProject);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+    // The brand of the open project page stays expanded and highlighted.
+    var curBrand = view === 'project' && currentProject && q1Data ? metaOf(currentProject).brand : null;
+    document.querySelectorAll('#nav .nav-group').forEach(function (g) {
+      var brand = g.dataset.brand, open = !!openGroups[brand] || brand === curBrand;
+      g.setAttribute('aria-expanded', String(open));
+      g.classList.toggle('has-current', brand === curBrand);
+      document.getElementById(g.getAttribute('aria-controls')).hidden = !open;
+    });
+  }
+  document.getElementById('menu-btn').addEventListener('click', function () {
+    var side = document.getElementById('side'), open = !side.classList.contains('open');
+    side.classList.toggle('open', open);
+    this.setAttribute('aria-expanded', String(open));
+  });
+  document.querySelectorAll('#period-seg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      period = b.dataset.period;
+      document.querySelectorAll('#period-seg button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      drawMetrics(); drawEmailCharts();
+    });
+  });
+
+  function setView(v, noPush) {
+    view = v;
+    document.getElementById('view-all').hidden = v !== 'all';
+    document.getElementById('view-project').hidden = v !== 'project';
+    document.getElementById('view-email').hidden = v !== 'email';
+    document.getElementById('metrics').hidden = v === 'email';
+
+    var title = document.getElementById('page-title');
+    if (v === 'project' && currentProject && q1Data) {
+      var m = metaOf(currentProject);
+      title.innerHTML = esc(m.brand) + '<span class="chip" title="' + esc(currentProject) + '">' + esc(m.platform) + '</span>';
+    } else title.textContent = v === 'all' ? 'All projects' : v === 'email' ? 'Email & SMS' : (currentProject || '');
+    if (v === 'project' && !q2Data) google.script.run.withSuccessHandler(renderQ2).withFailureHandler(showError).getQ2();
+    else if (v === 'project') drawProject();
+    if (v === 'email' && !emailData) google.script.run.withSuccessHandler(renderEmail).withFailureHandler(showError).getEmail();
+    else if (v === 'email') renderEmailPeriod();
+    if (v === 'email' && !emailTrends) google.script.run.withSuccessHandler(function (d) { emailTrends = d; drawEmailCharts(); }).withFailureHandler(showError).getEmailTrends();
+    else if (v === 'email') drawEmailCharts();
+    if (v !== 'email') setPeriodText();
+    markNav();
+    drawMetrics();
+    if (!noPush) pushUrl();
+  }
+  function openProject(name) { currentProject = name; setView('project'); }
+  function setPeriodText() {
+    if (!q1Data) return;
+    document.getElementById('period').textContent = 'Month to date: ' + q1Data.current[0] + ' to ' + q1Data.current[1] +
+      ' vs ' + q1Data.prior[0] + ' to ' + q1Data.prior[1] + '. Latest data: ' + q1Data.latest + '.';
+  }
+
+  // ---------- area charts ----------
+  function niceStep(max, n) {
+    var raw = max / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * mag;
+  }
+  // Axis labels name the gridline's exact value: 2500 -> $2.5k, never $3k.
+  function short(x) { return String(+x.toFixed(2)); }
+  function fmtAxis(kind, v) {
+    if (kind === 'roas') return short(v) + 'x';
+    var pre = kind === 'money' ? '$' : '';
+    return v >= 1e6 ? pre + short(v / 1e6) + 'M' : v >= 1e3 ? pre + short(v / 1e3) + 'k' : pre + short(v);
+  }
+  // Monotone cubic segments (no overshoot past the real values). pts: [[x, y], ...]
+  function monoSegments(pts) {
+    var n = pts.length, i, dx = [], m = [], t = [], segs = [];
+    if (n < 2) return segs;
+    for (i = 0; i < n - 1; i++) { dx[i] = pts[i + 1][0] - pts[i][0]; m[i] = (pts[i + 1][1] - pts[i][1]) / dx[i]; }
+    t[0] = m[0]; t[n - 1] = m[n - 2];
+    for (i = 1; i < n - 1; i++) t[i] = m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2;
+    for (i = 0; i < n - 1; i++) {
+      if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; }
+      var a = t[i] / m[i], b = t[i + 1] / m[i], h = a * a + b * b;
+      if (h > 9) { var k = 3 / Math.sqrt(h); t[i] = k * a * m[i]; t[i + 1] = k * b * m[i]; }
+    }
+    for (i = 0; i < n - 1; i++) {
+      var h3 = dx[i] / 3;
+      segs.push('C' + (pts[i][0] + h3).toFixed(1) + ',' + (pts[i][1] + t[i] * h3).toFixed(1) + ' ' +
+        (pts[i + 1][0] - h3).toFixed(1) + ',' + (pts[i + 1][1] - t[i + 1] * h3).toFixed(1) + ' ' +
+        pts[i + 1][0].toFixed(1) + ',' + pts[i + 1][1].toFixed(1));
+    }
+    return segs;
+  }
+  function runs(arr) {   // consecutive non-null index runs
+    var out = [], cur = null;
+    arr.forEach(function (v, i) { if (v == null) { cur = null; } else { if (!cur) out.push(cur = []); cur.push(i); } });
+    return out;
+  }
+
+  // opts: { now, prev, notes, labels, kind: 'money'|'count'|'roas', fmt, height, mini, ref, nowLbl, prevLbl, pointLabel(i, which) }
+  function areaChart(box, o) {
+    var hasNow = o.now.some(function (v) { return v != null; }), hasPrev = (o.prev || []).some(function (v) { return v != null; });
+    if (!hasNow && !hasPrev) { box.innerHTML = '<p class="empty">' + esc(o.emptyText || 'No data for this period yet.') + '</p>'; return; }
+    var W = Math.max(box.clientWidth, 120), H = o.height, mini = o.mini;
+    var ml = mini ? 0 : 48, mr = mini ? 0 : 14, mt = mini ? 4 : 10, mb = mini ? 2 : 24;
+    var n = o.labels.length;
+    var vals = o.now.concat(o.prev || []).filter(function (v) { return v != null; });
+    var ymax = Math.max.apply(null, vals.concat([o.ref ? o.ref * 1.2 : 0, 0]));
+    var step = niceStep(ymax || 1, mini ? 2 : 4), top = Math.ceil((ymax || 1) / step) * step;
+    var x = function (i) { return ml + (n > 1 ? i / (n - 1) : 0.5) * (W - ml - mr); };
+    var y = function (v) { return mt + (1 - v / top) * (H - mt - mb); };
+    var base = y(0), svg = '';
+    if (!mini) {
+      var g = '', ax = '';
+      for (var tv = 0; tv <= top + 1e-9; tv += step) {
+        g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(tv) + '" y2="' + y(tv) + '"></line>';
+        ax += '<text x="' + (ml - 8) + '" y="' + (y(tv) + 4) + '" text-anchor="end">' + fmtAxis(o.kind, tv) + '</text>';
+      }
+      var ticks = o.ticks(W);
+      ticks.forEach(function (i) { ax += '<text x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(o.labels[i]) + '</text>'; });
+      svg += '<g class="grid">' + g + '</g><g class="axis">' + ax + '</g>';
+    }
+    function shape(arr, areaCls, lineCls, partial) {
+      var area = '', line = '', part = '';
+      runs(arr).forEach(function (idx) {
+        var pts = idx.map(function (i) { return [x(i), y(arr[i])]; });
+        var segs = monoSegments(pts), start = 'M' + pts[0][0].toFixed(1) + ',' + pts[0][1].toFixed(1);
+        if (pts.length === 1) { line += '<circle cx="' + pts[0][0] + '" cy="' + pts[0][1] + '" r="3" class="' + (lineCls === 'line-prev' ? 'dot-prev' : 'dot-now') + '"></circle>'; return; }
+        area += start + segs.join('') + 'L' + pts[pts.length - 1][0].toFixed(1) + ',' + base + 'L' + pts[0][0].toFixed(1) + ',' + base + 'Z';
+        if (!partial) { line += '<path class="' + lineCls + '" d="' + start + segs.join('') + '"></path>'; return; }
+        // Dotted where either end of a step is a partial point (in progress or only partly uploaded).
+        var solid = '', dotted = '';
+        segs.forEach(function (s, k) {
+          var from = 'M' + pts[k][0].toFixed(1) + ',' + pts[k][1].toFixed(1);
+          if (partial[idx[k]] || partial[idx[k + 1]]) dotted += from + s; else solid += from + s;
+        });
+        line += '<path class="' + lineCls + '" d="' + solid + '"></path><path class="line-part" d="' + dotted + '"></path>';
+      });
+      return (area ? '<path class="' + areaCls + '" d="' + area + '"></path>' : '') + line;
+    }
+    var partial = o.now.map(function (v, i) { return !!(o.notes && o.notes[0][i]); });
+    if (o.prev) svg += shape(o.prev, 'area-prev', 'line-prev', null);
+    svg += shape(o.now, 'area-now', 'line-now', partial);
+    if (o.ref && top >= o.ref && !mini) {
+      svg += '<line class="ref" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(o.ref) + '" y2="' + y(o.ref) + '"></line>' +
+        '<text class="ref-label" x="' + (ml + 4) + '" y="' + (y(o.ref) - 5) + '">1.0x: sales = spend</text>';
+    }
+    var lastI = -1; o.now.forEach(function (v, i) { if (v != null) lastI = i; });
+    if (lastI >= 0 && !mini) {
+      var ex = x(lastI), ey = y(o.now[lastI]), anchor = ex > W - 90 ? 'end' : 'start';
+      svg += '<circle class="end" cx="' + ex + '" cy="' + ey + '" r="4"></circle>' +
+        '<text class="end-label" x="' + (ex + (anchor === 'end' ? -8 : 8)) + '" y="' + (ey - 8) + '" text-anchor="' + anchor + '">' + o.fmt(o.now[lastI]) + '</text>';
+    }
+    var aria = (o.title || '') + ': latest ' + (lastI >= 0 ? o.pointLabel(lastI, 0) + ' ' + o.fmt(o.now[lastI]) : 'no data') +
+      (o.prev ? (hasPrev ? '; ' + o.prevLbl + ' shown for comparison.' : '; no ' + o.prevLbl + ' data.') : '.');
+    box.innerHTML = '<svg width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(aria) + '">' + svg +
+      '<g class="hover" style="display:none"><line class="cross" y1="' + mt + '" y2="' + (H - mb) + '"></line>' +
+      '<circle class="dot-prev" r="4"></circle><circle class="dot-now" r="4"></circle></g>' +
+      '<rect x="' + ml + '" y="0" width="' + (W - ml - mr) + '" height="' + H + '" fill="transparent"></rect></svg>';
+    var el = box.querySelector('svg'), hov = el.querySelector('.hover');
+    el.querySelector('rect').addEventListener('mousemove', function (e) {
+      var r = el.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.round((e.clientX - r.left - ml) / (W - ml - mr) * (n - 1))));
+      var a = o.now[i], b = o.prev ? o.prev[i] : null;
+      hov.style.display = '';
+      var cr = hov.querySelector('.cross'); cr.setAttribute('x1', x(i)); cr.setAttribute('x2', x(i));
+      var dn = hov.querySelector('.dot-now'), dp = hov.querySelector('.dot-prev');
+      dn.style.display = a == null ? 'none' : ''; dp.style.display = b == null ? 'none' : '';
+      if (a != null) { dn.setAttribute('cx', x(i)); dn.setAttribute('cy', y(a)); }
+      if (b != null) { dp.setAttribute('cx', x(i)); dp.setAttribute('cy', y(b)); }
+      var html = '<b>' + esc(o.pointLabel(i, 0)) + '</b>: ' + (a == null ? 'no data' : o.fmt(a));
+      if (o.notes && o.notes[0][i]) html += '<br><span style="color:var(--text-muted)">' + esc(o.notes[0][i]) + '</span>';
+      if (o.prev) {
+        html += '<br><b>' + esc(o.pointLabel(i, 1)) + '</b>: ' + (b == null ? 'no data' : o.fmt(b));
+        if (o.notes && o.notes[1][i]) html += '<br><span style="color:var(--text-muted)">' + esc(o.notes[1][i]) + '</span>';
+        html += '<br>Change: ' + (a != null && b ? fmtPct(a / b - 1) : 'n/a');
+      }
+      showTip(e, html);
+    });
+    el.querySelector('rect').addEventListener('mouseleave', function () { hov.style.display = 'none'; hideTip(); });
+  }
+
+  // Labels for the selected period (from the notebook's Q3 Trends tab).
+  function periodInfo(src) {
+    var v = (src || trends).views[period] || { now: '', prev: '' };
+    var mon = function (s) { return (s || '').split(' ')[0]; };
+    var info = {
+      daily: { each: 'Each day', run: 'Running total', roasRun: 'Month to date', by: 'by day',
+        point: function (lab, w) { return mon(w ? v.prev : v.now) + ' ' + lab; },
+        ticks: function (labels, W) { var t = W < 380 ? [1, 10, 20, 30] : [1, 5, 10, 15, 20, 25, 30]; return t.filter(function (d) { return d <= labels.length; }).map(function (d) { return d - 1; }); } },
+      monthly: { each: 'Each month', run: 'Year to date', roasRun: 'Year to date', by: 'by month',
+        point: function (lab, w) { return lab + ' ' + (w ? v.prev : v.now); },
+        ticks: function (labels, W) { return labels.map(function (_, i) { return i; }).filter(function (i) { return W >= 480 || i % 2 === 0; }); } },
+      quarterly: { each: 'Each quarter', run: 'Year to date', roasRun: 'Year to date', by: 'by quarter',
+        point: function (lab, w) { return lab + ' ' + (w ? v.prev : v.now); },
+        ticks: function (labels) { return labels.map(function (_, i) { return i; }); } },
+      yearly: { each: 'Each year', run: null, roasRun: null, by: 'by year',
+        point: function (lab) { return lab; },
+        ticks: function (labels, W) { var s = Math.ceil(labels.length / Math.max(1, Math.floor(W / 60))); return labels.map(function (_, i) { return i; }).filter(function (i) { return i % s === 0; }); } }
+    }[period];
+    info.nowLbl = period === 'yearly' ? 'Each year' : v.now;
+    info.prevLbl = period === 'yearly' ? '' : v.prev;
+    return info;
+  }
+
+  function legendHtml(info, hasPrev) {
+    return '<div class="legend"><span class="key"><span class="sw" style="background:var(--now)"></span>' + esc(info.nowLbl) + '</span>' +
+      (period === 'yearly' ? '' : '<span class="key"><span class="sw" style="background:var(--prev)"></span>' + esc(info.prevLbl) +
+      (hasPrev ? '' : ': no data uploaded') + '</span>') + '</div>';
+  }
+  function modeSeg(key, info, runLabel) {
+    if (!runLabel) return '';
+    return '<div class="seg" role="group" aria-label="View">' + [['each', info.each], ['run', runLabel]].map(function (m) {
+      return '<button type="button" data-chart="' + key + '" data-mode="' + m[0] + '" aria-pressed="' + (mode[key] === m[0]) + '">' + m[1] + '</button>';
+    }).join('') + '</div>';
+  }
+  function wireModes(el) {
+    el.querySelectorAll('[data-chart]').forEach(function (b) {
+      b.addEventListener('click', function () { mode[b.dataset.chart] = b.dataset.mode; drawMetrics(); drawEmailCharts(); });
+    });
+  }
+
+  // ---------- KPI cards + charts (All projects and each project page) ----------
+  function lastIndex(arr) { var k = -1; arr.forEach(function (v, i) { if (v != null) k = i; }); return k; }
+  function drawMetrics() {
+    if (!q1Data || !trends || view === 'email') return;
+    var name = view === 'project' ? currentProject : 'All projects';
+    var row = view === 'project' ? q1Data.projects.filter(function (p) { return p.project === name; })[0] : q1Data.total;
+    var tp = trends.projects[name] || {}, s = tp[period], daily = tp.daily;
+    var info = periodInfo();
+    if (!row) return;
+    var running = function (key) { return mode[key] === 'run' && (key === 'roas' ? info.roasRun : info.run); };
+    var series = function (k) { return s ? s[k] : [[], []]; };
+    var base = { labels: s ? s.labels : [], notes: s ? s.notes : null, nowLbl: info.nowLbl, prevLbl: info.prevLbl,
+      pointLabel: function (i, w) { return info.point(s.labels[i], w); }, ticks: function (W) { return info.ticks(s.labels, W); } };
+    var opt = function (extra) { var o = {}; Object.keys(base).forEach(function (k) { o[k] = base[k]; }); Object.keys(extra).forEach(function (k) { o[k] = extra[k]; }); return o; };
+    var prevOf = function (arr) { return period === 'yearly' ? null : arr[1]; };
+    var hasPrev = function (arr) { return arr[1].some(function (v) { return v != null; }); };
+
+    // Hero: Sales
+    var sk = running('sales') ? 'salesCum' : 'sales', ss = series(sk);
+    var hero = document.getElementById('hero');
+    hero.innerHTML = '<div class="head-row"><div><div class="big">' + fmtMoney(row.sales[0]) + '</div>' +
+      '<div class="kpi-label">Sales</div><div class="caption">Month to date ' + delta(row.sales[2], true) + ' vs ' +
+      (row.sales[1] ? fmtMoney(row.sales[1]) : 'no data') + ' last month</div></div>' + modeSeg('sales', info, info.run) + '</div>' +
+      legendHtml(info, hasPrev(ss)) + '<div class="ac" style="flex:1;margin-top:6px"></div>';
+    wireModes(hero);
+    areaChart(hero.querySelector('.ac'), opt({ now: ss[0], prev: prevOf(ss), kind: 'money', fmt: fmtMoney, height: 300, title: 'Sales ' + info.by }));
+
+    // Orders MTD comes from the daily running orders at the latest day, vs last month on the same day.
+    var oc = daily ? daily.ordersCum : [[], []], li = lastIndex(oc[0]);
+    var oNow = li >= 0 ? oc[0][li] : null, oPrev = li >= 0 ? oc[1][li] : null;
+    var cards = [
+      { id: 'kpi-orders', label: 'Orders', value: fmtCount(oNow), d: oNow != null && oPrev ? oNow / oPrev - 1 : null, good: true,
+        was: oPrev ? fmtCount(oPrev) : 'no data', key: 'orders', kind: 'count', fmt: fmtCount },
+      { id: 'kpi-spend', label: 'Spend', value: fmtSpend(row.spend[0]), d: row.spend[2], good: null,
+        was: row.spend[1] ? fmtMoney(row.spend[1]) : 'no data', key: 'spend', kind: 'money', fmt: fmtMoney },
+      { id: 'kpi-roas', label: 'ROAS', value: fmtRoas(row.roas[0]), d: row.roas[2], good: true,
+        was: row.roas[1] ? fmtRoas(row.roas[1]) : 'no data', key: 'roas', kind: 'roas', fmt: fmtRoas },
+      { id: 'kpi-proas', label: 'Platform ROAS', value: fmtRoas(row.platformRoas[0]), d: row.platformRoas[2], good: true,
+        was: row.platformRoas[1] ? fmtRoas(row.platformRoas[1]) : 'no data', key: 'platformRoas', kind: 'roas', fmt: fmtRoas }
+    ];
+    cards.forEach(function (c) {
+      var el = document.getElementById(c.id), sr = series(c.key);
+      el.innerHTML = '<div class="big">' + c.value + '</div><div class="kpi-label">' + c.label + '</div>' +
+        '<div class="caption">MTD ' + delta(c.d, c.good) + ' vs ' + c.was + '</div><div class="ac" style="margin-top:10px"></div>';
+      areaChart(el.querySelector('.ac'), opt({ now: sr[0], prev: prevOf(sr), kind: c.kind, fmt: c.fmt, height: 72, mini: true,
+        title: c.label + ' ' + info.by, emptyText: c.kind === 'count' ? 'No orders yet.' : 'No ad spend data.' }));
+    });
+
+    // Detail charts: Orders and ROAS
+    var ok = running('orders') ? 'ordersCum' : 'orders', os = series(ok);
+    var co = document.getElementById('chart-orders');
+    co.innerHTML = '<div class="head-row"><div><h2>Orders ' + info.by + '</h2><p class="note">Total orders (core + upsell), as on the project sheets.</p></div>' +
+      modeSeg('orders', info, info.run) + '</div>' + legendHtml(info, hasPrev(os)) + '<div class="ac"></div>';
+    wireModes(co);
+    areaChart(co.querySelector('.ac'), opt({ now: os[0], prev: prevOf(os), kind: 'count', fmt: fmtCount, height: 230, title: 'Orders ' + info.by }));
+
+    var rk = running('roas') ? 'roasCum' : 'roas', rs = series(rk);
+    var cr = document.getElementById('chart-roas');
+    cr.innerHTML = '<div class="head-row"><div><h2>ROAS ' + info.by + '</h2><p class="note">ROAS = Sales &divide; Spend. Below 1.0x, ad spend is higher than sales.</p></div>' +
+      modeSeg('roas', info, info.roasRun) + '</div>' + legendHtml(info, hasPrev(rs)) + '<div class="ac"></div>';
+    wireModes(cr);
+    areaChart(cr.querySelector('.ac'), opt({ now: rs[0], prev: prevOf(rs), kind: 'roas', fmt: fmtRoas, height: 230, ref: 1,
+      title: 'ROAS ' + info.by, emptyText: 'No ad spend data for this project.' }));
+  }
+  var resizeTimer = null;
+  window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(function () { drawMetrics(); drawEmailCharts(); }, 150); });
+
+  // ---------- All projects: bars + table ----------
+  var METRICS = [
+    { key: 'sales', label: 'Sales', fmt: fmtMoney, good: true },
+    { key: 'spend', label: 'Spend', fmt: fmtSpend, good: null },
+    { key: 'roas', label: 'ROAS', fmt: fmtRoas, good: true },
+    { key: 'platformRoas', label: 'Platform ROAS', fmt: fmtRoas, good: true }
+  ];
+  function renderBars(projects) {
+    var rows = projects.slice().sort(function (a, b) {
+      return (b.sales[2] == null ? -Infinity : b.sales[2]) - (a.sales[2] == null ? -Infinity : a.sales[2]);
+    });
+    var max = Math.max.apply(null, rows.map(function (r) { return Math.abs(r.sales[2] || 0); }).concat([0.0001]));
+    var el = document.getElementById('bars');
+    el.innerHTML = rows.map(function (r, i) {
+      var v = r.sales[2], w = v == null ? 0 : Math.abs(v) / max * 50;
+      return '<div class="name" title="' + esc(r.project) + '">' + esc(r.project) + '</div>' +
+        '<div class="track">' + (v == null ? '' : '<div class="bar ' + (v >= 0 ? 'pos' : 'neg') + '" style="width:' + w + '%"></div>') +
+        '<div class="hit" data-i="' + i + '"></div></div><div class="pct">' + delta(v, true) + '</div>';
+    }).join('');
+    el.querySelectorAll('.hit').forEach(function (h) {
+      var r = rows[+h.dataset.i];
+      h.addEventListener('mousemove', function (e) {
+        showTip(e, '<b>' + esc(r.project) + '</b><br>This month: ' + fmtMoney(r.sales[0]) + '<br>Last month: ' +
+          (r.sales[1] ? fmtMoney(r.sales[1]) : 'no data') + '<br>Change: ' + fmtPct(r.sales[2]));
+      });
+      h.addEventListener('mouseleave', hideTip);
+    });
+  }
+  var sortState = { col: 1, dir: -1 };
+  function renderTable(d) {
+    var cols = [{ label: 'Project', get: function (r) { return r.project; }, cell: function (r) {
+      return r.project === 'All projects' ? esc(r.project) : '<button class="linkish" data-project="' + esc(r.project) + '">' + esc(r.project) + '</button>'; } }];
+    METRICS.forEach(function (m) {
+      cols.push({ label: m.label + ' MTD', get: function (r) { return r[m.key][0]; }, cell: function (r) {
+        return m.fmt(r[m.key][0]) + '<span class="was">' + (r[m.key][1] ? 'was ' + m.fmt(r[m.key][1]) : 'no data last month') + '</span>'; } });
+      cols.push({ label: m.label + ' MoM', get: function (r) { return r[m.key][2]; }, cell: function (r) { return delta(r[m.key][2], m.good); } });
+    });
+    var c = cols[sortState.col];
+    var rows = d.projects.slice().sort(function (a, b) {
+      var x = c.get(a), y = c.get(b);
+      if (x == null) return 1; if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * sortState.dir;
+    });
+    var tr = function (r) { return '<tr>' + cols.map(function (col) { return '<td>' + (col.cell ? col.cell(r) : esc(col.get(r))) + '</td>'; }).join('') + '</tr>'; };
+    var t = document.getElementById('table');
+    t.innerHTML = '<thead><tr>' + cols.map(function (col, i) {
+      return '<th data-i="' + i + '"' + (i === sortState.col ? ' aria-sort="' + (sortState.dir > 0 ? 'ascending' : 'descending') + '"' : '') + '>' + col.label + '</th>';
+    }).join('') + '</tr></thead><tbody>' + rows.map(tr).join('') + '</tbody>' + (d.total ? '<tfoot>' + tr(d.total) + '</tfoot>' : '');
+    t.querySelectorAll('th').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var i = +th.dataset.i;
+        sortState = { col: i, dir: i === sortState.col ? -sortState.dir : (i === 0 ? 1 : -1) };
+        renderTable(d);
+      });
+    });
+    t.querySelectorAll('[data-project]').forEach(function (b) { b.addEventListener('click', function () { openProject(b.dataset.project); }); });
+  }
+
+  // ---------- Project page: UTM Source donut + top 10 ----------
+  // Colors follow the source name, not its rank: the three biggest sources across
+  // all projects get fixed slots, everything else folds into "Other".
+  var UNTAGGED = '(not tagged)', SLOTS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)'], sourceColor = {};
+  function buildColors(projects) {
+    var tot = {};
+    projects.forEach(function (p) { p.sources.forEach(function (s) { if (s.source !== UNTAGGED) tot[s.source] = (tot[s.source] || 0) + (s.sales || 0); }); });
+    Object.keys(tot).sort(function (a, b) { return tot[b] - tot[a]; }).slice(0, SLOTS.length).forEach(function (n, i) { sourceColor[n] = SLOTS[i]; });
+  }
+  function slicesFor(p) {
+    var named = [], other = { label: 'Other', sales: 0, orders: 0, share: 0, color: 'var(--other)', members: [] }, untagged = null;
+    p.sources.forEach(function (s) {
+      if (s.source === UNTAGGED) untagged = { label: 'Not tagged', sales: s.sales, orders: s.orders, share: s.share, color: 'var(--untagged)' };
+      else if (sourceColor[s.source]) named.push({ label: s.source, sales: s.sales, orders: s.orders, share: s.share, color: sourceColor[s.source] });
+      else { other.sales += s.sales || 0; other.orders += s.orders || 0; other.share += s.share || 0; other.members.push(s.source); }
+    });
+    var out = named.sort(function (a, b) { return b.sales - a.sales; });
+    if (other.members.length) out.push(other);
+    if (untagged) out.push(untagged);
+    return out;
+  }
+  function arcPath(cx, cy, r0, r1, a0, a1) {
+    var large = a1 - a0 > Math.PI ? 1 : 0, pt = function (r, a) { return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; };
+    var p0 = pt(r1, a0), p1 = pt(r1, a1), p2 = pt(r0, a1), p3 = pt(r0, a0);
+    return 'M' + p0 + 'A' + r1 + ',' + r1 + ' 0 ' + large + ' 1 ' + p1 + 'L' + p2 + 'A' + r0 + ',' + r0 + ' 0 ' + large + ' 0 ' + p3 + 'Z';
+  }
+  function renderDonut(p) {
+    var el = document.getElementById('donut');
+    if (!p || !p.sources.length) { el.innerHTML = '<p class="empty">No order data for this project this month.</p>'; return; }
+    var slices = slicesFor(p), total = slices.reduce(function (t, s) { return t + (s.sales || 0); }, 0);
+    var size = 220, c = size / 2, r1 = 100, r0 = 64, a = 0, svg = '';
+    slices.forEach(function (s, i) {
+      var frac = total ? (s.sales || 0) / total : 0;
+      if (frac <= 0) return;
+      if (frac >= 0.9999) svg += '<circle class="slice" data-i="' + i + '" cx="' + c + '" cy="' + c + '" r="' + ((r0 + r1) / 2) + '" fill="none" style="stroke:' + s.color + ';stroke-width:' + (r1 - r0) + '"></circle>';
+      else svg += '<path data-i="' + i + '" d="' + arcPath(c, c, r0, r1, a, a + frac * 2 * Math.PI) + '" style="fill:' + s.color + '"></path>';
+      a += frac * 2 * Math.PI;
+    });
+    var top = slices.reduce(function (m, s) { return !m || (s.sales || 0) > (m.sales || 0) ? s : m; }, null);
+    var center = '<text class="center-big" x="' + c + '" y="' + (c + 2) + '" text-anchor="middle">' + fmtPct(top.share).replace('+', '') +
+      '</text><text class="center-small" x="' + c + '" y="' + (c + 22) + '" text-anchor="middle">' + esc(top.label) + '</text>';
+    el.innerHTML = '<svg class="donut" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="Sales by UTM Source">' + svg + center + '</svg>' +
+      '<ul class="dlegend">' + slices.map(function (s) {
+        var nm = s.members && s.members.length ? 'Other (' + s.members.map(esc).join(', ') + ')' : esc(s.label);
+        return '<li><span class="sw" style="background:' + s.color + '"></span><span>' + nm + '</span><span class="v">' + fmtMoney(s.sales) + '</span><span class="p">' + fmtPct(s.share).replace('+', '') + '</span></li>';
+      }).join('') + '</ul>';
+    el.querySelectorAll('[data-i]').forEach(function (node) {
+      var s = slices[+node.dataset.i];
+      node.addEventListener('mousemove', function (e) { showTip(e, '<b>' + esc(s.label) + '</b><br>Sales: ' + fmtMoney(s.sales) + '<br>Orders: ' + (s.orders == null ? 'n/a' : s.orders) + '<br>Share: ' + fmtPct(s.share).replace('+', '')); });
+      node.addEventListener('mouseleave', hideTip);
+    });
+  }
+  // Top-N table + note, shared by project pages and the email page. wrap: let long values wrap.
+  function topTableHtml(top, field, emptyText, wrap) {
+    if (!top.length) return '<tbody><tr><td style="text-align:left">' + esc(emptyText) + '</td></tr></tbody>';
+    var max = Math.max.apply(null, top.map(function (t) { return t.share || 0; }).concat([0.0001]));
+    return '<thead><tr><th>#</th><th style="text-align:left">' + esc(field) + '</th><th>Sales</th><th>Orders</th><th>Share of sales</th></tr></thead><tbody>' +
+      top.map(function (r) {
+        return '<tr><td>' + r.rank + '</td><td class="content' + (wrap ? ' wrap' : '') + '" style="text-align:left" title="' + esc(r.content) + '">' + esc(r.content) + '</td>' +
+          '<td>' + fmtMoney(r.sales) + '</td><td>' + (r.orders == null ? 'n/a' : r.orders) + '</td>' +
+          '<td><div class="share"><span>' + fmtPct(r.share).replace('+', '') + '</span><span class="track2"><span class="fill" style="width:' + ((r.share || 0) / max * 100) + '%"></span></span></div></td></tr>';
+      }).join('') + '</tbody>';
+  }
+  function topNote(top, untagged, field) {
+    var covered = top.reduce(function (s, r) { return s + (r.share || 0); }, 0);
+    var head = top.length ? 'Ranked by month-to-date sales. These ' + top.length + ' cover ' + fmtPct(covered).replace('+', '') + ' of sales' : 'Month to date';
+    return head + (untagged ? '; ' + fmtPct(untagged.share).replace('+', '') + ' of sales (' + fmtMoney(untagged.sales) + ') has no ' + field + '.' : '.');
+  }
+  function renderTop(p) {
+    if (!p) { document.getElementById('top').innerHTML = ''; document.getElementById('top-note').textContent = 'No order data for this project this month.'; return; }
+    document.getElementById('top').innerHTML = topTableHtml(p.top, 'UTM Content', 'No UTM Content on this project\'s sales this month.');
+    document.getElementById('top-note').textContent = topNote(p.top, p.untagged, 'UTM Content');
+  }
+  function renderQ2(d) { q2Data = d; buildColors(d.projects); drawProject(); }
+  function drawProject() {
+    if (!q2Data || !currentProject) return;
+    var p = q2Data.projects.filter(function (x) { return x.project === currentProject; })[0];
+    renderDonut(p); renderTop(p);
+  }
+
+  // ---------- Email & SMS ----------
+  var emailSort = { col: 2, dir: -1 };
+  function sourceLabel(s) { return s === 'emotive' ? 'emotive (SMS)' : s === 'simon' ? 'simon (email)' : s; }
+  function renderEmailPeriod() {
+    if (emailData) document.getElementById('period').textContent = 'Month to date: ' + emailData.current[0] + ' to ' + emailData.current[1] +
+      ' vs ' + emailData.prior[0] + ' to ' + emailData.prior[1] + '.';
+  }
+  function renderEmail(d) {
+    emailData = d;
+    if (view === 'email') renderEmailPeriod();
+    drawEmailCharts();
+    document.getElementById('email-top').innerHTML = (d.top || []).map(function (b) {
+      var note = b.top.length || b.untagged ? topNote(b.top, b.untagged, b.field) : 'No orders from this source this month.';
+      if (b.field !== 'UTM Content') note += ' UTM Content is blank on these orders, so this ranks ' + b.field + ' (the message name).';
+      var empty = b.untagged ? 'No ' + b.field + ' on these orders this month.' : 'No orders from this source this month.';
+      return '<section class="card"><h2>' + esc(sourceLabel(b.source)) + ': top 10 ' + esc(b.field) + '</h2>' +
+        '<p class="note">' + esc(note) + '</p><div class="scroll"><table>' + topTableHtml(b.top, b.field, empty, true) + '</table></div></section>';
+    }).join('');
+    renderEmailTable();
+  }
+  // Email & SMS charts: total sales (hero), one card per source, one chart per source.
+  // Each source gets its own chart and scale: simon is ~17x emotive, so one shared axis
+  // would flatten the smaller sources.
+  function drawEmailCharts() {
+    if (view !== 'email' || !emailData || !emailTrends) return;
+    var info = periodInfo(emailTrends);
+    var run = mode.email === 'run' && info.run;
+    var key = run ? 'salesCum' : 'sales';
+    var seriesOf = function (name) { var t = (emailTrends.projects[name] || {})[period]; return t || null; };
+    var mk = function (name, title, height, mini) {
+      var s = seriesOf(name), arr = s ? s[key] : [[], []];
+      return { now: arr[0], prev: period === 'yearly' ? null : arr[1], labels: s ? s.labels : [], notes: s ? s.notes : null,
+        nowLbl: info.nowLbl, prevLbl: info.prevLbl, kind: 'money', fmt: fmtMoney, height: height, mini: mini, title: title,
+        emptyText: 'No orders from this source in this period.',
+        pointLabel: function (i, w) { return info.point(s.labels[i], w); }, ticks: function (W) { return info.ticks(s.labels, W); } };
+    };
+    var hasPrev = function (name) { var s = seriesOf(name); return !!s && s[key][1].some(function (v) { return v != null; }); };
+    var tot = emailData.total;
+    var hero = document.getElementById('email-hero');
+    hero.innerHTML = '<div class="head-row"><div><div class="big">' + fmtMoney(tot ? tot.sales[0] : null) + '</div>' +
+      '<div class="kpi-label">Email &amp; SMS sales</div><div class="caption">Month to date ' + delta(tot ? tot.sales[2] : null, true) + ' vs ' +
+      (tot && tot.sales[1] ? fmtMoney(tot.sales[1]) : 'no data') + ' last month &middot; ' + fmtCount(tot ? tot.orders[0] : 0) + ' orders</div></div>' +
+      modeSeg('email', info, info.run) + '</div>' + legendHtml(info, hasPrev('All email & SMS')) + '<div class="ac" style="flex:1;margin-top:6px"></div>';
+    wireModes(hero);
+    areaChart(hero.querySelector('.ac'), mk('All email & SMS', 'Email & SMS sales ' + info.by, 300, false));
+    // Source cards (right of the hero): number + mini chart, in the configured source order.
+    var bySrc = {}; emailData.bySource.forEach(function (r) { bySrc[r.source] = r; });
+    var sources = Object.keys(emailTrends.projects).filter(function (n) { return n !== 'All email & SMS'; });
+    var grid = document.getElementById('email-kpis');
+    grid.querySelectorAll('.kpi').forEach(function (n) { n.remove(); });
+    sources.slice(0, 3).forEach(function (src) {
+      var r = bySrc[src], card = document.createElement('article');
+      card.className = 'card kpi';
+      card.innerHTML = '<div class="big">' + fmtMoney(r ? r.sales[0] : 0) + '</div><div class="kpi-label">' + esc(sourceLabel(src)) + '</div>' +
+        '<div class="caption">MTD ' + delta(r ? r.sales[2] : null, true) + ' vs ' + (r && r.sales[1] ? fmtMoney(r.sales[1]) : 'no data') +
+        ' &middot; ' + fmtCount(r ? r.orders[0] : 0) + ' orders</div><div class="ac" style="margin-top:10px"></div>';
+      grid.appendChild(card);
+      areaChart(card.querySelector('.ac'), mk(src, sourceLabel(src) + ' ' + info.by, 72, true));
+    });
+    // Fourth card: total email & SMS orders, so the 2x2 next to the hero is full.
+    var oc = document.createElement('article'), ok = run ? 'ordersCum' : 'orders', os = seriesOf('All email & SMS');
+    oc.className = 'card kpi';
+    oc.innerHTML = '<div class="big">' + fmtCount(tot ? tot.orders[0] : 0) + '</div><div class="kpi-label">Email &amp; SMS orders</div>' +
+      '<div class="caption">MTD ' + delta(tot && tot.orders[1] ? tot.orders[0] / tot.orders[1] - 1 : null, true) + ' vs ' +
+      (tot && tot.orders[1] ? fmtCount(tot.orders[1]) : 'no data') + '</div><div class="ac" style="margin-top:10px"></div>';
+    grid.appendChild(oc);
+    var om = mk('All email & SMS', 'Email & SMS orders ' + info.by, 72, true);
+    om.now = os ? os[ok][0] : []; om.prev = period === 'yearly' || !os ? null : os[ok][1]; om.kind = 'count'; om.fmt = fmtCount;
+    areaChart(oc.querySelector('.ac'), om);
+    // One full chart per source.
+    var charts = document.getElementById('email-charts');
+    charts.innerHTML = sources.map(function (src, i) {
+      return '<article class="card" id="email-chart-' + i + '"><h2>' + esc(sourceLabel(src)) + ' sales ' + info.by + '</h2>' +
+        legendHtml(info, hasPrev(src)) + '<div class="ac"></div></article>';
+    }).join('');
+    sources.forEach(function (src, i) {
+      areaChart(charts.querySelector('#email-chart-' + i + ' .ac'), mk(src, sourceLabel(src) + ' sales ' + info.by, 220, false));
+    });
+  }
+
+  function renderEmailTable() {
+    var cols = [
+      { label: 'Funnel', get: function (r) { return r.funnel; }, left: true },
+      { label: 'UTM Source', get: function (r) { return r.source; }, left: true },
+      { label: 'Sales MTD', get: function (r) { return r.sales[0]; }, cell: function (r) {
+        return fmtMoney(r.sales[0]) + '<span class="was">' + (r.sales[1] ? 'was ' + fmtMoney(r.sales[1]) : 'no data last month') + '</span>'; } },
+      { label: 'Sales MoM', get: function (r) { return r.sales[2]; }, cell: function (r) { return delta(r.sales[2], true); } },
+      { label: 'Orders MTD', get: function (r) { return r.orders[0]; } }
+    ];
+    var c = cols[emailSort.col];
+    var rows = emailData.funnels.slice().sort(function (a, b) {
+      var x = c.get(a), y = c.get(b);
+      if (x == null) return 1; if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * emailSort.dir;
+    });
+    var t = document.getElementById('email-table');
+    t.innerHTML = '<thead><tr>' + cols.map(function (col, i) {
+      return '<th data-i="' + i + '"' + (i === emailSort.col ? ' aria-sort="' + (emailSort.dir > 0 ? 'ascending' : 'descending') + '"' : '') + (col.left ? ' style="text-align:left"' : '') + '>' + col.label + '</th>';
+    }).join('') + '</tr></thead><tbody>' + rows.map(function (r) {
+      return '<tr>' + cols.map(function (col) { return '<td' + (col.left ? ' style="text-align:left"' : '') + '>' + (col.cell ? col.cell(r) : esc(col.get(r))) + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</tbody>';
+    t.querySelectorAll('th').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var i = +th.dataset.i;
+        emailSort = { col: i, dir: i === emailSort.col ? -emailSort.dir : (cols[i].left ? 1 : -1) };
+        renderEmailTable();
+      });
+    });
+  }
+
+  // ---------- load ----------
+  google.script.run.withSuccessHandler(function (d) { trends = d; drawMetrics(); }).withFailureHandler(showError).getTrends();
+  google.script.run
+    .withSuccessHandler(function (d) {
+      q1Data = d;
+      buildNav(); renderBars(d.projects); renderTable(d); setPeriodText(); drawMetrics();
+      if (!hasUrlApi) return;
+      google.script.url.getLocation(function (loc) {
+        var prm = loc.parameter || {};
+        if (prm.project) openProject(prm.project);
+        else if (prm.view === 'email') setView('email', true);
+      });
+    })
+    .withFailureHandler(showError)
+    .getQ1();
+</script>
+</body>
+</html>
