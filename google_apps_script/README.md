@@ -36,8 +36,8 @@ Feb), the last-month window stops at that month's final day.
 
 1. Run the notebook through section 5 once, so the dashboard tabs exist.
 2. Open the dashboard sheet, then **Extensions > Apps Script**.
-3. Replace the contents of `Code.gs` with `apps_script/Code.gs` from this repo.
-4. Click **+ > HTML**, name it `Index` (exactly), and paste in `apps_script/Index.html`.
+3. Replace the contents of `Code.gs` with `google_apps_script/Code.gs` from this repo.
+4. Click **+ > HTML**, name it `Index` (exactly), and paste in `google_apps_script/Index.html`.
 5. Click **Deploy > New deployment**, type **Web app**.
    - Execute as: **Me**
    - Who has access: pick who should see it (e.g. anyone in your organization)
