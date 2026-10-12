@@ -128,27 +128,32 @@ function getEmail() {
   };
 }
 
-const DAILY_TAB = 'Q3 Daily';
-const DAILY_HEADER_ROW = 4;
+const TRENDS_TAB = 'Q3 Trends';
+const TRENDS_HEADER_ROW = 6;
 
-// Day-by-day Sales and ROAS for the line charts, grouped by project.
-// Blank cells (no data that day / that month) come back as null.
-function getDaily() {
-  const ws = SpreadsheetApp.getActive().getSheetByName(DAILY_TAB);
-  if (!ws) throw new Error('Tab "' + DAILY_TAB + '" not found. Run the notebook\'s dashboard cell first.');
-  const windows = ws.getRange('B1:C2').getDisplayValues();
+// Line-chart series per project and view (daily / monthly / quarterly / yearly).
+// Each metric is [this period's points, comparison points]; blanks are null.
+function getTrends() {
+  const ws = SpreadsheetApp.getActive().getSheetByName(TRENDS_TAB);
+  if (!ws) throw new Error('Tab "' + TRENDS_TAB + '" not found. Run the notebook\'s dashboard cell first.');
+  const views = {};
+  ws.getRange(1, 1, 4, 3).getDisplayValues().forEach(function (r) { views[r[0]] = { now: r[1], prev: r[2] }; });
   const last = ws.getLastRow();
-  const values = last > DAILY_HEADER_ROW
-    ? ws.getRange(DAILY_HEADER_ROW + 1, 1, last - DAILY_HEADER_ROW, 10).getValues() : [];
+  const values = last > TRENDS_HEADER_ROW
+    ? ws.getRange(TRENDS_HEADER_ROW + 1, 1, last - TRENDS_HEADER_ROW, 22).getValues() : [];
+  const cols = { sales: 4, salesCum: 6, orders: 8, ordersCum: 10, roas: 12, roasCum: 14, spend: 18, platformRoas: 20 };
   const projects = {};
   values.forEach(function (r) {
-    const n = String(r[0]);
-    if (!n) return;
-    const p = projects[n] || (projects[n] = { sales: [[], []], salesCum: [[], []], roas: [[], []], roasMtd: [[], []] });
-    p.sales[0].push(num_(r[2])); p.sales[1].push(num_(r[3]));
-    p.salesCum[0].push(num_(r[4])); p.salesCum[1].push(num_(r[5]));
-    p.roas[0].push(num_(r[6])); p.roas[1].push(num_(r[7]));
-    p.roasMtd[0].push(num_(r[8])); p.roasMtd[1].push(num_(r[9]));
+    const n = String(r[0]), v = String(r[1]);
+    if (!n || !v) return;
+    const p = projects[n] || (projects[n] = {});
+    const s = p[v] || (p[v] = { labels: [], notes: [[], []] });
+    s.labels.push(String(r[3]));
+    s.notes[0].push(String(r[16] || '')); s.notes[1].push(String(r[17] || ''));
+    Object.keys(cols).forEach(function (k) {
+      (s[k] || (s[k] = [[], []]))[0].push(num_(r[cols[k]]));
+      s[k][1].push(num_(r[cols[k] + 1]));
+    });
   });
-  return { current: windows[0], prior: windows[1], projects: projects };
+  return { views: views, projects: projects };
 }
