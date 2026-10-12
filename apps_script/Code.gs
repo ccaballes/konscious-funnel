@@ -145,9 +145,14 @@ const TRENDS_HEADER_ROW = 6;
 
 // Line-chart series per project and view (daily / monthly / quarterly / yearly).
 // Each metric is [this period's points, comparison points]; blanks are null.
-function getTrends() {
-  const ws = SpreadsheetApp.getActive().getSheetByName(TRENDS_TAB);
-  if (!ws) throw new Error('Tab "' + TRENDS_TAB + '" not found. Run the notebook\'s dashboard cell first.');
+function getTrends() { return trendsFrom_(TRENDS_TAB); }
+
+// Same layout as Q3 Trends, one group per email/SMS source plus 'All email & SMS'.
+function getEmailTrends() { return trendsFrom_('Email Trends'); }
+
+function trendsFrom_(tab) {
+  const ws = SpreadsheetApp.getActive().getSheetByName(tab);
+  if (!ws) throw new Error('Tab "' + tab + '" not found. Run the notebook\'s dashboard cell first.');
   const views = {};
   ws.getRange(1, 1, 4, 3).getDisplayValues().forEach(function (r) { views[r[0]] = { now: r[1], prev: r[2] }; });
   const last = ws.getLastRow();
