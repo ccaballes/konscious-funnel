@@ -116,6 +116,9 @@
     text-decoration-color: var(--border); text-underline-offset: 3px; cursor: pointer; text-align: left; }
   .linkish:hover { text-decoration-color: currentColor; }
   .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
+  .stack { display: grid; gap: 16px; margin-bottom: 16px; }
+  .stack > * { min-width: 0; }
+  td.content.wrap { white-space: normal; max-width: none; min-width: 240px; overflow-wrap: anywhere; }
   /* view switcher + project picker */
   .tabs { display: flex; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--border); }
   .tabs button {
@@ -199,6 +202,7 @@
 
   <div id="view-email" hidden>
     <div class="tiles" id="email-tiles"></div>
+    <div class="stack" id="email-top"></div>
     <section class="card">
       <h2>Email &amp; SMS sales by funnel</h2>
       <p class="note">Orders whose UTM Source is an email or SMS platform (simon, attentive, emotive), from any funnel. emotive is SMS. Click a column to sort.</p>
@@ -444,26 +448,32 @@
     });
   }
 
+  // Top-N table body + its one-line note. wrap: let long values wrap instead of truncating.
+  function topTableHtml(top, field, emptyText, wrap) {
+    if (!top.length) return '<tbody><tr><td style="text-align:left">' + esc(emptyText) + '</td></tr></tbody>';
+    var max = Math.max.apply(null, top.map(function (t) { return t.share || 0; }).concat([0.0001]));
+    return '<thead><tr><th>#</th><th style="text-align:left">' + esc(field) + '</th><th>Sales</th><th>Orders</th><th>Share of sales</th></tr></thead><tbody>' +
+      top.map(function (r) {
+        return '<tr><td>' + r.rank + '</td><td class="content' + (wrap ? ' wrap' : '') + '" style="text-align:left" title="' + esc(r.content) + '">' + esc(r.content) + '</td>' +
+          '<td>' + fmtMoney(r.sales) + '</td><td>' + (r.orders == null ? 'n/a' : r.orders) + '</td>' +
+          '<td><div class="share"><span>' + fmtPct(r.share).replace('+', '') + '</span><span class="track2"><span class="fill" style="display:block;width:' +
+          ((r.share || 0) / max * 100) + '%"></span></span></div></td></tr>';
+      }).join('') + '</tbody>';
+  }
+  function topNote(top, untagged, field) {
+    var covered = top.reduce(function (s, r) { return s + (r.share || 0); }, 0);
+    var head = top.length ? 'Ranked by month-to-date sales. These ' + top.length + ' cover ' + fmtPct(covered).replace('+', '') + ' of sales' : 'Month to date';
+    return head + (untagged ? '; ' + fmtPct(untagged.share).replace('+', '') + ' of sales (' + fmtMoney(untagged.sales) +
+      ') has no ' + field + '.' : '.');
+  }
   function renderTop(p) {
     if (!p) {
       document.getElementById('top').innerHTML = '';
       document.getElementById('top-note').textContent = 'No order data for this project this month.';
       return;
     }
-    var max = Math.max.apply(null, p.top.map(function (t) { return t.share || 0; }).concat([0.0001]));
-    var t = document.getElementById('top');
-    t.innerHTML = p.top.length ? '<thead><tr><th>#</th><th style="text-align:left">UTM Content</th><th>Sales</th><th>Orders</th><th>Share of sales</th></tr></thead><tbody>' +
-      p.top.map(function (r) {
-        return '<tr><td>' + r.rank + '</td><td class="content" style="text-align:left" title="' + esc(r.content) + '">' + esc(r.content) + '</td>' +
-          '<td>' + fmtMoney(r.sales) + '</td><td>' + (r.orders == null ? 'n/a' : r.orders) + '</td>' +
-          '<td><div class="share"><span>' + fmtPct(r.share).replace('+', '') + '</span><span class="track2"><span class="fill" style="display:block;width:' +
-          ((r.share || 0) / max * 100) + '%"></span></span></div></td></tr>';
-      }).join('') + '</tbody>'
-      : '<tbody><tr><td style="text-align:left">No UTM Content on this project\'s sales this month.</td></tr></tbody>';
-    var covered = p.top.reduce(function (s, r) { return s + (r.share || 0); }, 0);
-    document.getElementById('top-note').textContent = 'Ranked by month-to-date sales. These ' + p.top.length + ' cover ' +
-      fmtPct(covered).replace('+', '') + ' of sales' + (p.untagged ? '; ' + fmtPct(p.untagged.share).replace('+', '') +
-      ' of sales (' + fmtMoney(p.untagged.sales) + ') has no UTM Content.' : '.');
+    document.getElementById('top').innerHTML = topTableHtml(p.top, 'UTM Content', 'No UTM Content on this project\'s sales this month.');
+    document.getElementById('top-note').textContent = topNote(p.top, p.untagged, 'UTM Content');
   }
 
   function renderQ2(d) {
@@ -501,13 +511,24 @@
     periodText.email = d.current[0] + ' to ' + d.current[1] + ' vs ' + d.prior[0] + ' to ' + d.prior[1] + '.';
     if (currentView === 'email') document.getElementById('period').textContent = periodText.email;
     var tiles = (d.total ? [{ label: 'All email & SMS', r: d.total }] : [])
-      .concat(d.bySource.map(function (r) { return { label: r.source === 'emotive' ? 'emotive (SMS)' : r.source, r: r }; }));
+      .concat(d.bySource.map(function (r) { return { label: sourceLabel(r.source), r: r }; }));
     document.getElementById('email-tiles').innerHTML = tiles.map(function (t) {
       return '<div class="card tile"><div class="label">' + esc(t.label) + '</div>' +
         '<div class="value">' + fmtMoney(t.r.sales[0]) + '</div>' + delta(t.r.sales[2], true) +
         ' <span class="was">vs ' + fmtPrior(fmtMoney, t.r.sales[1]) + ' last month &middot; ' + (t.r.orders[0] || 0) + ' orders</span></div>';
     }).join('');
+    document.getElementById('email-top').innerHTML = (d.top || []).map(function (b) {
+      var note = b.top.length || b.untagged ? topNote(b.top, b.untagged, b.field)
+        : 'No orders from this source this month.';
+      if (b.field !== 'UTM Content') note += ' UTM Content is blank on these orders, so this ranks ' + b.field + ' (the message name).';
+      var empty = b.untagged ? 'No ' + b.field + ' on these orders this month.' : 'No orders from this source this month.';
+      return '<section class="card"><h2>' + esc(sourceLabel(b.source)) + ': top 10 ' + esc(b.field) + '</h2>' +
+        '<p class="note">' + esc(note) + '</p><div class="scroll"><table>' + topTableHtml(b.top, b.field, empty, true) + '</table></div></section>';
+    }).join('');
     renderEmailTable();
+  }
+  function sourceLabel(s) {
+    return s === 'emotive' ? 'emotive (SMS)' : s === 'simon' ? 'simon (email)' : s;
   }
   function renderEmailTable() {
     var cols = [

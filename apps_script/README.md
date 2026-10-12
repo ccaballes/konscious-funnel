@@ -14,6 +14,7 @@ section 5 fills that sheet; this code only displays it.
 | `Q2 Top Content` | notebook (values) | Month-to-date top 10 UTM Content per project, plus a "(not tagged)" row for sales with no UTM Content. |
 | `Email Data` | notebook | One row per day / UTM Source / UTM Medium / funnel for orders whose UTM Source is in `EMAIL_UTM_SOURCES` (simon, attentive, emotive), from any funnel. |
 | `Email MTD` | notebook (values) | Email & SMS sales month to date vs the same days last month, per funnel and source, plus totals per source. |
+| `Email Top 10` | notebook (values) | Month-to-date top 10 per email/SMS source. Each source is ranked by the field `EMAIL_TOP_FIELDS` names for it: UTM Content for simon and attentive, UTM Campaign for emotive (its UTM Content is always blank; the campaign is the text message name). |
 
 UTM Source is matched ignoring case, and `UTM_SOURCE_ALIASES` in the control
 cell merges spellings (e.g. `simons` -> `simon`).

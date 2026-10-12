@@ -84,6 +84,28 @@ function getQ2() {
 
 const EMAIL_TAB = 'Email MTD';
 const EMAIL_HEADER_ROW = 4;
+const EMAIL_TOP_TAB = 'Email Top 10';
+const EMAIL_TOP_HEADER_ROW = 3;
+
+// Top 10 per email/SMS source, in the order the notebook wrote them.
+// A row with no rank is that source's blank-field total (or an empty block).
+function emailTop_() {
+  const ws = SpreadsheetApp.getActive().getSheetByName(EMAIL_TOP_TAB);
+  if (!ws) return [];
+  const last = ws.getLastRow();
+  const values = last > EMAIL_TOP_HEADER_ROW
+    ? ws.getRange(EMAIL_TOP_HEADER_ROW + 1, 1, last - EMAIL_TOP_HEADER_ROW, 7).getValues() : [];
+  const bySource = {}, order = [];
+  values.forEach(function (r) {
+    const src = String(r[0]);
+    if (!src) return;
+    if (!bySource[src]) { bySource[src] = { source: src, field: String(r[1]), top: [], untagged: null }; order.push(src); }
+    const item = { rank: num_(r[2]), content: String(r[3]), sales: num_(r[4]), orders: num_(r[5]), share: num_(r[6]) };
+    if (item.rank !== null) bySource[src].top.push(item);
+    else if (item.content) bySource[src].untagged = item;
+  });
+  return order.map(function (s) { return bySource[s]; });
+}
 
 function getEmail() {
   const ws = SpreadsheetApp.getActive().getSheetByName(EMAIL_TAB);
@@ -101,6 +123,7 @@ function getEmail() {
     current: windows[0], prior: windows[1],
     funnels: rows.filter(function (r) { return r.funnel !== 'All funnels' && r.funnel !== 'All email & SMS'; }),
     bySource: rows.filter(function (r) { return r.funnel === 'All funnels'; }),
-    total: rows.filter(function (r) { return r.funnel === 'All email & SMS'; })[0] || null
+    total: rows.filter(function (r) { return r.funnel === 'All email & SMS'; })[0] || null,
+    top: emailTop_()
   };
 }
