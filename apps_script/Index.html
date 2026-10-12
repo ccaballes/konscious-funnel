@@ -117,6 +117,31 @@
   .linkish:hover { text-decoration-color: currentColor; }
   .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
   .stack { display: grid; gap: 16px; margin-bottom: 16px; }
+  /* line charts: this month vs last month */
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; margin-bottom: 16px; }
+  .charts > * { min-width: 0; }
+  .chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: var(--surface-1); color: var(--text-secondary); border: 0; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--neutral); color: var(--text-primary); font-weight: 600; }
+  .seg button:focus-visible, .tabs button:focus-visible, .linkish:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+  .lc-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); margin: 8px 0 4px; }
+  .lc-legend .key { display: inline-flex; align-items: center; gap: 6px; }
+  .lc-legend svg { flex: none; }
+  .lc svg { display: block; overflow: visible; }
+  .lc .grid line { stroke: var(--border); stroke-width: 1; }
+  .lc .axis text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .lc .now { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .lc .prev { fill: none; stroke: var(--text-muted); stroke-width: 2; stroke-dasharray: 5 4; stroke-linejoin: round; }
+  .lc .now-last { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-dasharray: 2 3; opacity: .7; }
+  .lc .ref { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 2 3; }
+  .lc .ref-label { fill: var(--text-secondary); font-size: 11px; paint-order: stroke; stroke: var(--surface-1); stroke-width: 4px; stroke-linejoin: round; }
+  .lc .end { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+  .lc .end-label { fill: var(--text-primary); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--surface-1); stroke-width: 4px; stroke-linejoin: round; }
+  .lc .cross { stroke: var(--text-muted); stroke-width: 1; }
+  .lc .dot-now { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+  .lc .dot-prev { fill: var(--text-muted); stroke: var(--surface-1); stroke-width: 2; }
   .stack > * { min-width: 0; }
   td.content.wrap { white-space: normal; max-width: none; min-width: 240px; overflow-wrap: anywhere; }
   /* view switcher + project picker */
@@ -165,6 +190,10 @@
 
   <div id="view-q1">
   <div class="tiles" id="tiles"></div>
+  <div class="charts">
+    <section class="card chart" id="chart-sales-all"></section>
+    <section class="card chart" id="chart-roas-all"></section>
+  </div>
 
   <section class="card">
     <h2>Sales change by project</h2>
@@ -186,6 +215,10 @@
     </div>
     <h2 class="page-title" id="project-title"></h2>
     <div class="tiles" id="project-tiles"></div>
+    <div class="charts">
+      <section class="card chart" id="chart-sales-proj"></section>
+      <section class="card chart" id="chart-roas-proj"></section>
+    </div>
     <div class="grid2">
       <section class="card">
         <h2>Sales by UTM Source</h2>
@@ -360,6 +393,7 @@
     if (v === 'email' && !emailData) {
       google.script.run.withSuccessHandler(renderEmail).withFailureHandler(showError).getEmail();
     }
+    drawCharts();
     if (!noPush) pushUrl();
   }
   function openProject(name) {
@@ -500,9 +534,142 @@
     document.getElementById('project-title').textContent = currentProject;
     document.getElementById('project-tiles').innerHTML = q1 ? metricTiles(q1, '') : '';
     renderDonut(q2); renderTop(q2);
+    drawCharts();
     periodText.q2 = periodText.q1;
     if (currentView === 'q2') document.getElementById('period').textContent = periodText.q2;
   }
+
+  // ---------- Line charts: this month vs last month ----------
+  var dailyData = null;
+  var chartMode = { sales: 'daily', roas: 'daily' };
+  var SALES_MODES = { daily: { label: 'Daily', key: 'sales' }, cum: { label: 'Running total', key: 'salesCum' } };
+  var ROAS_MODES = { daily: { label: 'Daily', key: 'roas' }, mtd: { label: 'Month to date', key: 'roasMtd' } };
+  function monthName(iso) {
+    var m = /^(\d{4})-(\d{2})/.exec(iso || '');
+    return m ? new Date(+m[1], +m[2] - 1, 1).toLocaleString('en-US', { month: 'short' }) : '';
+  }
+  function niceStep(max, count) {
+    var raw = max / count, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * mag;
+  }
+  // Axis labels must name the gridline's exact value: 2500 -> $2.5k, never $3k.
+  function fmtAxisMoney(v) {
+    var short = function (x) { return String(+x.toFixed(2)); };
+    return v >= 1e6 ? '$' + short(v / 1e6) + 'M' : v >= 1e3 ? '$' + short(v / 1e3) + 'k' : '$' + short(v);
+  }
+
+  // kind: 'sales' | 'roas'. series = dailyData.projects[name].
+  function drawLineChart(el, kind, series, title) {
+    var modes = kind === 'sales' ? SALES_MODES : ROAS_MODES;
+    var mode = modes[chartMode[kind]];
+    var nowLbl = monthName(dailyData.current[0]), prevLbl = monthName(dailyData.prior[0]);
+    var now = series ? series[mode.key][0] : [], prev = series ? series[mode.key][1] : [];
+    var fmt = kind === 'sales' ? fmtMoney : fmtRoas;
+    var hasPrev = prev.some(function (v) { return v != null; });
+    var hasNow = now.some(function (v) { return v != null; });
+    var seg = '<div class="seg" role="group" aria-label="' + esc(title) + ' view">' + Object.keys(modes).map(function (k) {
+      return '<button type="button" data-kind="' + kind + '" data-mode="' + k + '" aria-pressed="' + (k === chartMode[kind]) + '">' + modes[k].label + '</button>';
+    }).join('') + '</div>';
+    var line = function (cls) { return '<svg width="22" height="8" aria-hidden="true"><line x1="1" y1="4" x2="21" y2="4" class="' + cls + '" style="stroke-width:2;' +
+      (cls === 'prev' ? 'stroke:var(--text-muted);stroke-dasharray:5 4' : 'stroke:var(--series-1)') + '"></line></svg>'; };
+    var legend = '<div class="lc-legend"><span class="key">' + line('now') + nowLbl + ' (this month)</span>' +
+      '<span class="key">' + line('prev') + prevLbl + ' (last month)' + (hasPrev ? '' : ': no data uploaded') + '</span></div>';
+    var note = kind === 'sales'
+      ? (chartMode.sales === 'cum' ? 'Sales added up day by day. Where the solid line sits above the dashed one, the month is ahead of last month.' : 'Sales each day.')
+      : 'ROAS = Sales \u00f7 Spend' + (chartMode.roas === 'mtd' ? ', counting every day so far this month.' : ' for each day.') + ' Below 1.0x, ad spend is higher than sales.';
+    note += ' The dotted last step is the latest day in the upload, which can be a partial day.';
+    el.innerHTML = '<div class="chart-head"><div><h2>' + esc(title) + '</h2></div>' + seg + '</div>' +
+      '<p class="note">' + note + '</p>' + legend + '<div class="lc"></div>';
+    el.querySelectorAll('.seg button').forEach(function (b) {
+      b.addEventListener('click', function () { chartMode[b.dataset.kind] = b.dataset.mode; drawCharts(); });
+    });
+    var box = el.querySelector('.lc');
+    if (!hasNow && !hasPrev) {
+      box.innerHTML = '<p class="empty">' + (kind === 'roas' ? 'No ad spend data for this project.' : 'No order data for this project.') + '</p>';
+      return;
+    }
+    var W = Math.max(box.clientWidth, 260), H = 220, ml = 48, mr = 12, mt = 10, mb = 24;
+    var n = Math.max(now.length, prev.length);
+    var vals = now.concat(prev).filter(function (v) { return v != null; });
+    var ymax = Math.max.apply(null, vals.concat([kind === 'roas' ? 1.2 : 0]));
+    var step = niceStep(ymax || 1, 4), top = Math.ceil((ymax || 1) / step) * step;
+    var x = function (i) { return ml + (n > 1 ? i / (n - 1) : 0) * (W - ml - mr); };
+    var y = function (v) { return mt + (1 - v / top) * (H - mt - mb); };
+    var grid = '', ax = '';
+    for (var t = 0; t <= top + 1e-9; t += step) {
+      grid += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(t) + '" y2="' + y(t) + '"></line>';
+      ax += '<text x="' + (ml - 8) + '" y="' + (y(t) + 4) + '" text-anchor="end">' + (kind === 'sales' ? fmtAxisMoney(t) : t.toFixed(t < 10 && step < 1 ? 1 : 0) + 'x') + '</text>';
+    }
+    var ticks = [1, 5, 10, 15, 20, 25, 30].filter(function (d) { return d <= n; });
+    if (W < 360) ticks = ticks.filter(function (d) { return d === 1 || d % 10 === 0; });
+    ticks.forEach(function (d) { ax += '<text x="' + x(d - 1) + '" y="' + (H - 6) + '" text-anchor="middle">' + d + '</text>'; });
+    function path(arr) {
+      var dstr = '', pen = false;
+      arr.forEach(function (v, i) {
+        if (v == null) { pen = false; return; }
+        dstr += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1); pen = true;
+      });
+      return dstr;
+    }
+    var ref = '';
+    if (kind === 'roas' && top >= 1) {
+      ref = '<line class="ref" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(1) + '" y2="' + y(1) + '"></line>' +
+        '<text class="ref-label" x="' + (ml + 4) + '" y="' + (y(1) - 5) + '">1.0x: sales = spend</text>';
+    }
+    var lastI = -1; now.forEach(function (v, i) { if (v != null) lastI = i; });
+    var end = '';
+    if (lastI >= 0) {
+      var ex = x(lastI), ey = y(now[lastI]), anchor = ex > W - 90 ? 'end' : 'start', dx = anchor === 'end' ? -8 : 8;
+      end = '<circle class="end" cx="' + ex + '" cy="' + ey + '" r="4"></circle>' +
+        '<text class="end-label" x="' + (ex + dx) + '" y="' + (ey - 8) + '" text-anchor="' + anchor + '">' + fmt(now[lastI]) + '</text>';
+    }
+    var aria = title + ': ' + nowLbl + (lastI >= 0 ? ' day ' + (lastI + 1) + ' ' + fmt(now[lastI]) : ' no data') +
+      (hasPrev ? '; ' + prevLbl + ' line shown for comparison.' : '; no ' + prevLbl + ' data.');
+    box.innerHTML = '<svg width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(aria) + '">' +
+      '<g class="grid">' + grid + '</g><g class="axis">' + ax + '</g>' + ref +
+      '<path class="prev" d="' + path(prev) + '"></path>' +
+      // The latest day in the upload is often a partial day (export ran that day): draw its segment dotted.
+      '<path class="now" d="' + path(now.map(function (v, i) { return i < lastI ? v : null; })) + '"></path>' +
+      '<path class="now-last" d="' + path(now.map(function (v, i) { return i >= lastI - 1 && i <= lastI ? v : null; })) + '"></path>' + end +
+      '<g class="hover" style="display:none"><line class="cross" y1="' + mt + '" y2="' + (H - mb) + '"></line>' +
+      '<circle class="dot-prev" r="4"></circle><circle class="dot-now" r="4"></circle></g>' +
+      '<rect x="' + ml + '" y="0" width="' + (W - ml - mr) + '" height="' + H + '" fill="transparent"></rect></svg>';
+    var svg = box.querySelector('svg'), hov = svg.querySelector('.hover'), tip = document.getElementById('tip');
+    svg.querySelector('rect').addEventListener('mousemove', function (e) {
+      var rect = svg.getBoundingClientRect(), px = e.clientX - rect.left;
+      var i = Math.max(0, Math.min(n - 1, Math.round((px - ml) / (W - ml - mr) * (n - 1))));
+      var a = now[i], b = prev[i];
+      hov.style.display = '';
+      hov.querySelector('.cross').setAttribute('x1', x(i)); hov.querySelector('.cross').setAttribute('x2', x(i));
+      var dn = hov.querySelector('.dot-now'), dp = hov.querySelector('.dot-prev');
+      dn.style.display = a == null ? 'none' : ''; dp.style.display = b == null ? 'none' : '';
+      if (a != null) { dn.setAttribute('cx', x(i)); dn.setAttribute('cy', y(a)); }
+      if (b != null) { dp.setAttribute('cx', x(i)); dp.setAttribute('cy', y(b)); }
+      var chg = a != null && b ? fmtPct(a / b - 1) : 'n/a';
+      tip.innerHTML = '<b>Day ' + (i + 1) + '</b><br>' + nowLbl + ': ' + (a == null ? 'no data' : fmt(a)) +
+        '<br>' + prevLbl + ': ' + (b == null ? 'no data' : fmt(b)) + '<br>Change: ' + chg;
+      tip.style.display = 'block';
+      tip.style.left = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8) + 'px';
+      tip.style.top = (e.clientY + 14) + 'px';
+    });
+    svg.querySelector('rect').addEventListener('mouseleave', function () { hov.style.display = 'none'; tip.style.display = 'none'; });
+  }
+
+  // Draws the charts of the visible page only (hidden ones have no width).
+  function drawCharts() {
+    if (!dailyData) return;
+    if (currentView === 'q1') {
+      var all = dailyData.projects['All projects'];
+      drawLineChart(document.getElementById('chart-sales-all'), 'sales', all, 'Sales: this month vs last month, all projects');
+      drawLineChart(document.getElementById('chart-roas-all'), 'roas', all, 'ROAS: this month vs last month, all projects');
+    } else if (currentView === 'q2' && currentProject) {
+      var p = dailyData.projects[currentProject];
+      drawLineChart(document.getElementById('chart-sales-proj'), 'sales', p, 'Sales: this month vs last month');
+      drawLineChart(document.getElementById('chart-roas-proj'), 'roas', p, 'ROAS: this month vs last month');
+    }
+  }
+  var resizeTimer = null;
+  window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawCharts, 150); });
 
   // ---------- Email & SMS ----------
   var emailSort = { col: 2, dir: -1 };
@@ -563,6 +730,11 @@
       });
     });
   }
+
+  google.script.run
+    .withSuccessHandler(function (d) { dailyData = d; drawCharts(); })
+    .withFailureHandler(showError)
+    .getDaily();
 
   google.script.run
     .withSuccessHandler(function (d) {
