@@ -7,7 +7,7 @@ section 5 fills that sheet; this code only displays it.
 
 | Tab | Filled by | What it holds |
 |---|---|---|
-| `Projects` | notebook | Each project's brand and platform for the side menu, read from its `ads_match` token ("Vital BP Google" -> Vital BP / Google). A project can set `"brand"` or `"platform"` itself to override. |
+| `Projects` | notebook | Each project's brand and platform for the side menu, read from its `ads_match` token ("Vital BP Google" -> Vital BP / Google). A project can set `"brand"` or `"platform"` itself to override. Cell F1 holds when the notebook last finished writing (see **Loading speed**). |
 | `Data` | notebook | One row per project per day: Sales, orders, Spend, Purchases, Platform Revenue. New uploads overwrite matching dates and keep older ones. |
 | `Q1 MTD` | notebook (formulas) | Sales, Spend, ROAS and Platform ROAS, month to date vs the same days last month, per project and in total. The total ROAS counts only projects with ad spend in the window. |
 | `Q3 Trends` | notebook (values) | Per project and in total: Sales, Orders (Total Order), Spend, ROAS and Platform ROAS for four views: daily (this month vs last month), monthly and quarterly (this year vs last year) and yearly, each with running / to-date columns. A point is blank when no uploaded day falls in it; a note marks a point that is in progress or only partly uploaded. Feeds the charts. |
@@ -49,19 +49,38 @@ After that, every notebook run refreshes the numbers; just reload the page.
 
 - **All projects**: totals, charts and every project side by side. Click a project name to open its page.
 - **Charts** (All projects and every project page): a Daily / Monthly / Quarterly / Yearly
-  switch at the top. Sales (large chart), Orders, Spend, ROAS and Platform ROAS cards with
-  mini charts, plus Orders and ROAS detail charts. Each period is drawn against its comparison
-  (last month for Daily, last year for Monthly and Quarterly). Dotted steps mark periods that
-  are still in progress or only partly uploaded; hover a point to see why.
+  switch at the top. Sales (large chart), then Orders, Spend, ROAS and Platform ROAS cards, each
+  with a mini chart (hover it for exact values). The ROAS mini charts carry a dotted 1.0x
+  break-even line: below it, ad spend is higher than the sales it brought in. Each period is
+  drawn against its comparison (last month for Daily, last year for Monthly and Quarterly).
+  Dotted steps mark periods that are still in progress or only partly uploaded; hover a point
+  to see why.
 - **Project pages**: the side menu groups projects by brand; click a brand to see its
   platforms (Facebook, Google) and pick one. Each page has its cards, charts, UTM Source
   pie and top 10 UTM Content. Each has its own link: add `?project=SF` (any project
   name) to the web app URL, e.g. `https://script.google.com/.../exec?project=SF`.
-- **Email & SMS**: `?view=email`. Total email & SMS sales chart, a card per source plus total
-  orders, and one sales chart per source (each on its own scale, since simon is far larger),
-  all following the Daily / Monthly / Quarterly / Yearly switch; then the top 10 tables and the
-  funnel table. An **Email type** filter (All / Abandoned Cart / Regular Sales) at the top of the
+- **Email & SMS**: `?view=email`. Total email & SMS sales chart, then a card per source plus a
+  total orders card, each with a mini chart on its own scale (simon is far larger, so a shared
+  scale would flatten the others), all following the Daily / Monthly / Quarterly / Yearly
+  switch; then the top 10 tables and the funnel table. An **Email type** filter (All / Abandoned Cart / Regular Sales) at the top of the
   page switches every chart, card and table on it.
+
+## Loading speed
+
+- **Spinner**: each page shows a spinner until its numbers arrive. If loading fails, the page
+  says why and offers **Try again**.
+- **Only what the page needs, all at once**: a page asks the sheet only for its own data, in
+  parallel. A `?view=email` or `?project=` link no longer waits for the All projects data first.
+- **Other pages load in the background**: once the first page is up, the rest of the data loads
+  quietly, so switching pages is instant.
+- **Cache per notebook run**: the first visitor after a notebook run reads the sheet; everyone
+  after that gets a saved copy (kept up to 6 hours) instead of re-reading every tab. The notebook
+  writes the time it finished into `Projects` F1, and a new time means a fresh read, so a reload
+  after a run always shows the new numbers. F1 is blank while the notebook is writing (or if a
+  run failed), and then the dashboard always reads the sheet directly.
+  - The cache starts working after the first notebook run with this version of the notebook.
+  - Edited a dashboard tab by hand? Clear `Projects` F1 (or run the notebook again) so the
+    dashboard reads the sheet fresh.
 
 ## Updating the code
 
