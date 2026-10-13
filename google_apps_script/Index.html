@@ -90,6 +90,7 @@
   .seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--text-primary); font-weight: 700; }
 
   /* KPI area: hero chart + 2x2 small cards */
+  .big-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
   .kpi-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
   .hero { grid-row: span 2; display: flex; flex-direction: column; }
   .big { font-size: 34px; font-weight: 300; line-height: 1.1; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -184,7 +185,7 @@
     .menu-btn { display: inline-block; }
     .side:not(.open) #nav { display: none; }
     .main { padding-inline: 16px; }
-    .grid2 { grid-template-columns: minmax(0, 1fr); }
+    .grid2, .big-grid { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 480px) {
     .kpi-grid { gap: 10px; }
@@ -228,12 +229,11 @@
     </div>
 
     <div id="metrics" hidden>
-      <div class="kpi-grid">
-        <article class="card hero" id="hero"></article>
-        <article class="card kpi" id="kpi-orders"></article>
-        <article class="card kpi" id="kpi-spend"></article>
-        <article class="card kpi" id="kpi-roas"></article>
-        <article class="card kpi" id="kpi-proas"></article>
+      <div class="big-grid">
+        <article class="card" id="chart-sales"></article>
+        <article class="card" id="chart-orders"></article>
+        <article class="card" id="chart-spend"></article>
+        <article class="card" id="chart-roas"></article>
       </div>
     </div>
 
@@ -245,7 +245,7 @@
       </section>
       <section class="card">
         <h2>All projects</h2>
-        <p class="note">Month to date. Click a project name to open its page. ROAS = Sales &divide; Spend (your order data); the all-projects ROAS counts only projects with ad data. Platform ROAS = the ad platform's own reported revenue &divide; Spend. Click a column to sort.</p>
+        <p class="note">Month to date. Click a project name to open its page. ROAS = Sales &divide; Spend (your order data); the all-projects ROAS counts only projects with ad data. Click a column to sort.</p>
         <div class="scroll"><table id="table"></table></div>
       </section>
     </div>
@@ -319,7 +319,7 @@
   // ---------- state ----------
   var q1Data = null, q2Data = null, emailData = null, trends = null, emailTrends = null;
   var view = 'all', currentProject = null, period = 'daily';
-  var mode = { sales: 'each', email: 'each' };
+  var mode = { sales: 'each', orders: 'each', spend: 'each', roas: 'each', email: 'each' };
   var emailType = 'All';   // Email & SMS filter: All / Abandoned Cart / Regular Sales
   var hasUrlApi = !!(google.script.url && google.script.history);
   var busy = true;         // a page's data is loading (or failed): charts wait, since they measure their box
@@ -607,16 +607,16 @@
     var v = (src || trends).views[period] || { now: '', prev: '' };
     var mon = function (s) { return (s || '').split(' ')[0]; };
     var info = {
-      daily: { each: 'Each day', run: 'Running total', by: 'by day',
+      daily: { each: 'Each day', run: 'Running total', roasRun: 'Month to date', by: 'by day',
         point: function (lab, w) { return mon(w ? v.prev : v.now) + ' ' + lab; },
         ticks: function (labels, W) { var t = W < 380 ? [1, 10, 20, 30] : [1, 5, 10, 15, 20, 25, 30]; return t.filter(function (d) { return d <= labels.length; }).map(function (d) { return d - 1; }); } },
-      monthly: { each: 'Each month', run: 'Year to date', by: 'by month',
+      monthly: { each: 'Each month', run: 'Year to date', roasRun: 'Year to date', by: 'by month',
         point: function (lab, w) { return lab + ' ' + (w ? v.prev : v.now); },
         ticks: function (labels, W) { return labels.map(function (_, i) { return i; }).filter(function (i) { return W >= 480 || i % 2 === 0; }); } },
-      quarterly: { each: 'Each quarter', run: 'Year to date', by: 'by quarter',
+      quarterly: { each: 'Each quarter', run: 'Year to date', roasRun: 'Year to date', by: 'by quarter',
         point: function (lab, w) { return lab + ' ' + (w ? v.prev : v.now); },
         ticks: function (labels) { return labels.map(function (_, i) { return i; }); } },
-      yearly: { each: 'Each year', run: null, by: 'by year',
+      yearly: { each: 'Each year', run: null, roasRun: null, by: 'by year',
         point: function (lab) { return lab; },
         ticks: function (labels, W) { var s = Math.ceil(labels.length / Math.max(1, Math.floor(W / 60))); return labels.map(function (_, i) { return i; }).filter(function (i) { return i % s === 0; }); } }
     }[period];
@@ -642,10 +642,10 @@
     });
   }
 
-  // ---------- KPI cards + charts (All projects and each project page) ----------
-  // Sales gets the big chart; Orders, Spend, ROAS and Platform ROAS each get a mini chart on their
-  // card (hover for exact values). There are no separate Orders / ROAS charts: they repeated the
-  // card charts' data.
+  // ---------- Large charts (All projects and each project page) ----------
+  // Sales, Orders, Spend and ROAS each get a full-size chart with its month-to-date number,
+  // the change vs last month, and an Each / Running total (Month to date for ROAS) switch.
+  // Platform ROAS is left out of the report for now.
   function lastIndex(arr) { var k = -1; arr.forEach(function (v, i) { if (v != null) k = i; }); return k; }
   function drawMetrics() {
     if (busy || !q1Data || !trends || view === 'email') return;
@@ -654,44 +654,44 @@
     var tp = trends.projects[name] || {}, s = tp[period], daily = tp.daily;
     var info = periodInfo();
     if (!row) return;
-    var series = function (k) { return s ? s[k] : [[], []]; };
+    var series = function (k) { return s && s[k] ? s[k] : [[], []]; };
     var base = { labels: s ? s.labels : [], notes: s ? s.notes : null, nowLbl: info.nowLbl, prevLbl: info.prevLbl,
       pointLabel: function (i, w) { return info.point(s.labels[i], w); }, ticks: function (W) { return info.ticks(s.labels, W); } };
     var opt = function (extra) { var o = {}; Object.keys(base).forEach(function (k) { o[k] = base[k]; }); Object.keys(extra).forEach(function (k) { o[k] = extra[k]; }); return o; };
     var prevOf = function (arr) { return period === 'yearly' ? null : arr[1]; };
     var hasPrev = function (arr) { return arr[1].some(function (v) { return v != null; }); };
 
-    // Hero: Sales
-    var sk = mode.sales === 'run' && info.run ? 'salesCum' : 'sales', ss = series(sk);
-    var hero = document.getElementById('hero');
-    hero.innerHTML = '<div class="head-row"><div><div class="big">' + fmtMoney(row.sales[0]) + '</div>' +
-      '<div class="kpi-label">Sales</div><div class="caption">Month to date ' + delta(row.sales[2], true) + ' vs ' +
-      (row.sales[1] ? fmtMoney(row.sales[1]) : 'no data') + ' last month</div></div>' + modeSeg('sales', info, info.run) + '</div>' +
-      legendHtml(info, hasPrev(ss)) + '<div class="ac" style="flex:1;margin-top:6px"></div>';
-    wireModes(hero);
-    areaChart(hero.querySelector('.ac'), opt({ now: ss[0], prev: prevOf(ss), kind: 'money', fmt: fmtMoney, height: 300, title: 'Sales ' + info.by }));
-
     // Orders MTD comes from the daily running orders at the latest day, vs last month on the same day.
     var oc = daily ? daily.ordersCum : [[], []], li = lastIndex(oc[0]);
     var oNow = li >= 0 ? oc[0][li] : null, oPrev = li >= 0 ? oc[1][li] : null;
-    var cards = [
-      { id: 'kpi-orders', label: 'Orders', value: fmtCount(oNow), d: oNow != null && oPrev ? oNow / oPrev - 1 : null, good: true,
-        was: oPrev ? fmtCount(oPrev) : 'no data', key: 'orders', kind: 'count', fmt: fmtCount },
-      { id: 'kpi-spend', label: 'Spend', value: fmtSpend(row.spend[0]), d: row.spend[2], good: null,
-        was: row.spend[1] ? fmtMoney(row.spend[1]) : 'no data', key: 'spend', kind: 'money', fmt: fmtMoney },
-      { id: 'kpi-roas', label: 'ROAS', value: fmtRoas(row.roas[0]), d: row.roas[2], good: true,
-        was: row.roas[1] ? fmtRoas(row.roas[1]) : 'no data', key: 'roas', kind: 'roas', fmt: fmtRoas },
-      { id: 'kpi-proas', label: 'Platform ROAS', value: fmtRoas(row.platformRoas[0]), d: row.platformRoas[2], good: true,
-        was: row.platformRoas[1] ? fmtRoas(row.platformRoas[1]) : 'no data', key: 'platformRoas', kind: 'roas', fmt: fmtRoas }
+    var charts = [
+      { id: 'chart-sales', key: 'sales', label: 'Sales', value: fmtMoney(row.sales[0]), d: row.sales[2], good: true,
+        was: row.sales[1] ? fmtMoney(row.sales[1]) : 'no data', each: 'sales', run: 'salesCum', runLabel: info.run,
+        kind: 'money', fmt: fmtMoney, empty: 'No order data for this period.' },
+      { id: 'chart-orders', key: 'orders', label: 'Orders', value: fmtCount(oNow), d: oNow != null && oPrev ? oNow / oPrev - 1 : null, good: true,
+        was: oPrev ? fmtCount(oPrev) : 'no data', each: 'orders', run: 'ordersCum', runLabel: info.run,
+        kind: 'count', fmt: fmtCount, note: 'Total orders (core + upsell), as on the project sheets.', empty: 'No orders for this period.' },
+      { id: 'chart-spend', key: 'spend', label: 'Spend', value: fmtSpend(row.spend[0]), d: row.spend[2], good: null,
+        was: row.spend[1] ? fmtMoney(row.spend[1]) : 'no data', each: 'spend', run: 'spendCum', runLabel: info.run,
+        kind: 'money', fmt: fmtMoney, empty: 'No ad spend data for this project.' },
+      // ROAS shows the 1.0x line: below it, ad spend is higher than the sales it brought in.
+      { id: 'chart-roas', key: 'roas', label: 'ROAS', value: fmtRoas(row.roas[0]), d: row.roas[2], good: true,
+        was: row.roas[1] ? fmtRoas(row.roas[1]) : 'no data', each: 'roas', run: 'roasCum', runLabel: info.roasRun,
+        kind: 'roas', fmt: fmtRoas, ref: 1, note: 'ROAS = Sales \u00f7 Spend. Below 1.0x, ad spend is higher than sales.',
+        empty: 'No ad spend data for this project.' }
     ];
-    cards.forEach(function (c) {
-      var el = document.getElementById(c.id), sr = series(c.key);
-      el.innerHTML = '<div class="big">' + c.value + '</div><div class="kpi-label">' + c.label + '</div>' +
-        '<div class="caption">MTD ' + delta(c.d, c.good) + ' vs ' + c.was + '</div><div class="ac" style="margin-top:10px"></div>';
-      // ROAS cards show the 1.0x line: below it, ad spend is higher than the sales it brought in.
-      areaChart(el.querySelector('.ac'), opt({ now: sr[0], prev: prevOf(sr), kind: c.kind, fmt: c.fmt, height: 72, mini: true,
-        ref: c.kind === 'roas' ? 1 : null, title: c.label + ' ' + info.by,
-        emptyText: c.kind === 'count' ? 'No orders yet.' : 'No ad spend data.' }));
+    charts.forEach(function (c) {
+      var running = mode[c.key] === 'run' && c.runLabel;
+      var sr = series(running ? c.run : c.each);
+      var el = document.getElementById(c.id);
+      el.innerHTML = '<div class="head-row"><div><div class="big">' + c.value + '</div>' +
+        '<div class="kpi-label">' + c.label + '</div><div class="caption">Month to date ' + delta(c.d, c.good) + ' vs ' + c.was + ' last month</div></div>' +
+        modeSeg(c.key, info, c.runLabel) + '</div>' + legendHtml(info, hasPrev(sr)) + '<div class="ac" style="margin-top:6px"></div>' +
+        // Notes go under the chart so all four charts start at the same height.
+        (c.note ? '<p class="note" style="margin:8px 0 0">' + c.note + '</p>' : '');
+      wireModes(el);
+      areaChart(el.querySelector('.ac'), opt({ now: sr[0], prev: prevOf(sr), kind: c.kind, fmt: c.fmt, height: 240, ref: c.ref || null,
+        title: c.label + ' ' + info.by, emptyText: c.empty }));
     });
   }
   var resizeTimer = null;
@@ -701,8 +701,7 @@
   var METRICS = [
     { key: 'sales', label: 'Sales', fmt: fmtMoney, good: true },
     { key: 'spend', label: 'Spend', fmt: fmtSpend, good: null },
-    { key: 'roas', label: 'ROAS', fmt: fmtRoas, good: true },
-    { key: 'platformRoas', label: 'Platform ROAS', fmt: fmtRoas, good: true }
+    { key: 'roas', label: 'ROAS', fmt: fmtRoas, good: true }
   ];
   function renderBars(projects) {
     var rows = projects.slice().sort(function (a, b) {

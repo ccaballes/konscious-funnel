@@ -193,7 +193,8 @@ function email_() {
 const TRENDS_TAB = 'Q3 Trends';
 const TRENDS_HEADER_ROW = 6;
 
-const TREND_COLS = { sales: 4, salesCum: 6, orders: 8, ordersCum: 10, roas: 12, roasCum: 14, spend: 18, platformRoas: 20 };
+// Platform ROAS (columns U/V) is left out of the dashboard for now.
+const TREND_COLS = { sales: 4, salesCum: 6, orders: 8, ordersCum: 10, roas: 12, roasCum: 14, spend: 18, spendCum: 22 };
 
 // Line-chart series per project and view (daily / monthly / quarterly / yearly).
 // Each metric is [this period's points, comparison points]; blanks are null.
