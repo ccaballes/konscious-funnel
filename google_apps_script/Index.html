@@ -99,6 +99,7 @@
   .stack { display: grid; gap: 16px; margin-bottom: 16px; }
   .charts3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; margin-bottom: 16px; }
   .charts3 > * { min-width: 0; }
+  .section-title { font-size: 17px; margin: 4px 0 0; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 16px; margin-bottom: 16px; }
 
   /* charts */
@@ -261,6 +262,11 @@
         <article class="card hero" id="email-hero"></article>
       </div>
       <div class="charts3" id="email-charts"></div>
+      <section style="margin-bottom:16px">
+        <h2 class="section-title">Abandoned cart vs regular sales</h2>
+        <p class="note">Abandoned Cart = the order's UTM Campaign contains "abandoned" (any capitalization). Every other email &amp; SMS sale counts as Regular Sales.</p>
+        <div class="charts2" id="email-types"></div>
+      </section>
       <div class="stack" id="email-top"></div>
       <section class="card">
         <h2>Email &amp; SMS sales by funnel</h2>
@@ -823,7 +829,7 @@
     areaChart(hero.querySelector('.ac'), mk('All email & SMS', 'Email & SMS sales ' + info.by, 300, false));
     // Source cards (right of the hero): number + mini chart, in the configured source order.
     var bySrc = {}; emailData.bySource.forEach(function (r) { bySrc[r.source] = r; });
-    var sources = Object.keys(emailTrends.projects).filter(function (n) { return n !== 'All email & SMS'; });
+    var sources = Object.keys(emailTrends.projects).filter(function (n) { return n !== 'All email & SMS' && EMAIL_TYPES.indexOf(n) < 0; });
     var grid = document.getElementById('email-kpis');
     grid.querySelectorAll('.kpi').forEach(function (n) { n.remove(); });
     sources.slice(0, 3).forEach(function (src) {
@@ -854,7 +860,24 @@
     sources.forEach(function (src, i) {
       areaChart(charts.querySelector('#email-chart-' + i + ' .ac'), mk(src, sourceLabel(src) + ' sales ' + info.by, 220, false));
     });
+    // Abandoned Cart vs Regular Sales: month-to-date number (daily running total at the
+    // latest day, vs last month on the same day), share of email & SMS sales, and a chart.
+    var typesEl = document.getElementById('email-types');
+    typesEl.innerHTML = EMAIL_TYPES.map(function (t, i) {
+      var d = (emailTrends.projects[t] || {}).daily, sc = d ? d.salesCum : [[], []], oc = d ? d.ordersCum : [[], []];
+      var li = lastIndex(sc[0]), now = li >= 0 ? sc[0][li] : null, prev = li >= 0 ? sc[1][li] : null;
+      var share = now != null && tot && tot.sales[0] ? now / tot.sales[0] : null;
+      return '<article class="card" id="email-type-' + i + '"><div class="big">' + fmtMoney(now) + '</div>' +
+        '<div class="kpi-label">' + esc(t) + '</div><div class="caption">MTD ' + delta(now != null && prev ? now / prev - 1 : null, true) +
+        ' vs ' + (prev ? fmtMoney(prev) : 'no data') + ' &middot; ' + fmtCount(li >= 0 ? oc[0][li] : 0) + ' orders &middot; ' +
+        (share == null ? 'n/a' : fmtPct(share).replace('+', '')) + ' of email &amp; SMS sales</div>' +
+        legendHtml(info, hasPrev(t)) + '<div class="ac"></div></article>';
+    }).join('');
+    EMAIL_TYPES.forEach(function (t, i) {
+      areaChart(typesEl.querySelector('#email-type-' + i + ' .ac'), mk(t, t + ' sales ' + info.by, 220, false));
+    });
   }
+  var EMAIL_TYPES = ['Abandoned Cart', 'Regular Sales'];
 
   function renderEmailTable() {
     var cols = [
