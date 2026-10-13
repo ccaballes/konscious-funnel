@@ -15,9 +15,9 @@ section 5 fills that sheet; this code only displays it.
 | `Q2 UTM Source` | notebook (values) | Month-to-date sales split by UTM Source, per project. Feeds the pie chart. |
 | `Q2 Top Content` | notebook (values) | Month-to-date top 10 UTM Content per project, plus a "(not tagged)" row for sales with no UTM Content. |
 | `Email Data` | notebook | One row per day / UTM Source / UTM Medium / UTM Campaign / UTM Content / funnel for orders whose UTM Source is in `EMAIL_UTM_SOURCES` (simon, attentive, emotive), from any funnel, plus an **Email type** column: Abandoned Cart when the UTM Campaign contains a word from `EMAIL_ABANDONED_KEYWORDS` (default "abandoned"), else Regular Sales. |
-| `Email MTD` | notebook (values) | Email & SMS sales month to date vs the same days last month, per funnel and source, plus totals per source. |
-| `Email Trends` | notebook (values) | Same layout as `Q3 Trends`: one group per email/SMS source (simon incl. simons, attentive, emotive), "All email & SMS", and one per email type (Abandoned Cart, Regular Sales). Sales and Orders for the daily, monthly, quarterly and yearly views. Feeds the Email & SMS charts. |
-| `Email Top 10` | notebook (values) | Month-to-date top 10 per email/SMS source. Each source is ranked by the field `EMAIL_TOP_FIELDS` names for it: UTM Content for simon and attentive, UTM Campaign for emotive (its UTM Content is always blank; the campaign is the text message name). |
+| `Email MTD` | notebook (values) | Email & SMS sales month to date vs the same days last month, per funnel and source, plus totals per source. Written once per email type (column H: All / Abandoned Cart / Regular Sales) for the page's filter. |
+| `Email Trends` | notebook (values) | Same layout as `Q3 Trends`: one group per email/SMS source (simon incl. simons, attentive, emotive) and "All email & SMS", each also split by email type ("simon \| Abandoned Cart", "All email & SMS \| Regular Sales"). Sales and Orders for the daily, monthly, quarterly and yearly views. Feeds the Email & SMS charts. |
+| `Email Top 10` | notebook (values) | Month-to-date top 10 per email/SMS source and email type (column H). Each source is ranked by the field `EMAIL_TOP_FIELDS` names for it: UTM Content for simon and attentive, UTM Campaign for emotive (its UTM Content is always blank; the campaign is the text message name). |
 
 UTM Source is matched ignoring case, and `UTM_SOURCE_ALIASES` in the control
 cell merges spellings (e.g. `simons` -> `simon`).
@@ -59,9 +59,9 @@ After that, every notebook run refreshes the numbers; just reload the page.
   name) to the web app URL, e.g. `https://script.google.com/.../exec?project=SF`.
 - **Email & SMS**: `?view=email`. Total email & SMS sales chart, a card per source plus total
   orders, and one sales chart per source (each on its own scale, since simon is far larger),
-  all following the Daily / Monthly / Quarterly / Yearly switch; an Abandoned cart vs regular
-  sales section (month-to-date number, share of email & SMS sales and a chart for each); then
-  the top 10 tables and the funnel table.
+  all following the Daily / Monthly / Quarterly / Yearly switch; then the top 10 tables and the
+  funnel table. An **Email type** filter (All / Abandoned Cart / Regular Sales) at the top of the
+  page switches every chart, card and table on it.
 
 ## Updating the code
 

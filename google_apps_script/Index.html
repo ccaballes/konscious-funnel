@@ -99,7 +99,7 @@
   .stack { display: grid; gap: 16px; margin-bottom: 16px; }
   .charts3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; margin-bottom: 16px; }
   .charts3 > * { min-width: 0; }
-  .section-title { font-size: 17px; margin: 4px 0 0; }
+  .filter-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 16px; margin-bottom: 16px; }
 
   /* charts */
@@ -258,15 +258,19 @@
     </div>
 
     <div id="view-email" hidden>
+      <div class="filter-bar">
+        <span class="caption">Email type</span>
+        <div class="seg" id="email-type-seg" role="group" aria-label="Email type filter">
+          <button type="button" data-etype="All" aria-pressed="true">All</button>
+          <button type="button" data-etype="Abandoned Cart" aria-pressed="false">Abandoned Cart</button>
+          <button type="button" data-etype="Regular Sales" aria-pressed="false">Regular Sales</button>
+        </div>
+        <span class="caption" id="email-type-note"></span>
+      </div>
       <div class="kpi-grid" id="email-kpis">
         <article class="card hero" id="email-hero"></article>
       </div>
       <div class="charts3" id="email-charts"></div>
-      <section style="margin-bottom:16px">
-        <h2 class="section-title">Abandoned cart vs regular sales</h2>
-        <p class="note">Abandoned Cart = the order's UTM Campaign contains "abandoned" (any capitalization). Every other email &amp; SMS sale counts as Regular Sales.</p>
-        <div class="charts2" id="email-types"></div>
-      </section>
       <div class="stack" id="email-top"></div>
       <section class="card">
         <h2>Email &amp; SMS sales by funnel</h2>
@@ -309,6 +313,7 @@
   var q1Data = null, q2Data = null, emailData = null, trends = null, emailTrends = null;
   var view = 'all', currentProject = null, period = 'daily';
   var mode = { sales: 'each', orders: 'each', roas: 'each', email: 'each' };
+  var emailType = 'All';   // Email & SMS filter: All / Abandoned Cart / Regular Sales
   var hasUrlApi = !!(google.script.url && google.script.history);
 
   function showError(e) {
@@ -458,7 +463,10 @@
   // opts: { now, prev, notes, labels, kind: 'money'|'count'|'roas', fmt, height, mini, ref, nowLbl, prevLbl, pointLabel(i, which) }
   function areaChart(box, o) {
     var hasNow = o.now.some(function (v) { return v != null; }), hasPrev = (o.prev || []).some(function (v) { return v != null; });
-    if (!hasNow && !hasPrev) { box.innerHTML = '<p class="empty">' + esc(o.emptyText || 'No data for this period yet.') + '</p>'; return; }
+    // A sales/orders series that is zero everywhere has nothing to draw (a filter with no matching
+    // orders). ROAS at 0x is kept: spend with no sales is a real signal.
+    var allZero = o.kind !== 'roas' && !o.now.concat(o.prev || []).some(function (v) { return v != null && v !== 0; });
+    if ((!hasNow && !hasPrev) || allZero) { box.innerHTML = '<p class="empty">' + esc(o.emptyText || 'No data for this period yet.') + '</p>'; return; }
     var W = Math.max(box.clientWidth, 120), H = o.height, mini = o.mini;
     var ml = mini ? 0 : 48, mr = mini ? 0 : 14, mt = mini ? 4 : 10, mb = mini ? 2 : 24;
     var n = o.labels.length;
@@ -793,15 +801,26 @@
     emailData = d;
     if (view === 'email') renderEmailPeriod();
     drawEmailCharts();
-    document.getElementById('email-top').innerHTML = (d.top || []).map(function (b) {
+    document.getElementById('email-top').innerHTML = (d.top || []).filter(function (b) { return b.type === emailType; }).map(function (b) {
       var note = b.top.length || b.untagged ? topNote(b.top, b.untagged, b.field) : 'No orders from this source this month.';
       if (b.field !== 'UTM Content') note += ' UTM Content is blank on these orders, so this ranks ' + b.field + ' (the message name).';
       var empty = b.untagged ? 'No ' + b.field + ' on these orders this month.' : 'No orders from this source this month.';
-      return '<section class="card"><h2>' + esc(sourceLabel(b.source)) + ': top 10 ' + esc(b.field) + '</h2>' +
+      return '<section class="card"><h2>' + esc(sourceLabel(b.source)) + (emailType === 'All' ? '' : ' (' + esc(emailType) + ')') + ': top 10 ' + esc(b.field) + '</h2>' +
         '<p class="note">' + esc(note) + '</p><div class="scroll"><table>' + topTableHtml(b.top, b.field, empty, true) + '</table></div></section>';
     }).join('');
     renderEmailTable();
   }
+  document.querySelectorAll('#email-type-seg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      emailType = b.dataset.etype;
+      document.querySelectorAll('#email-type-seg button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      if (emailData) { renderEmail(emailData); } else drawEmailCharts();
+    });
+  });
+  // Trend group for a source (or the total) under the current filter: "simon | Abandoned Cart".
+  function emailGroup(base) { return emailType === 'All' ? base : base + ' | ' + emailType; }
+  function emailSet() { return (emailData && emailData.types[emailType]) || { funnels: [], bySource: [], total: null }; }
+
   // Email & SMS charts: total sales (hero), one card per source, one chart per source.
   // Each source gets its own chart and scale: simon is ~17x emotive, so one shared axis
   // would flatten the smaller sources.
@@ -815,21 +834,26 @@
       var s = seriesOf(name), arr = s ? s[key] : [[], []];
       return { now: arr[0], prev: period === 'yearly' ? null : arr[1], labels: s ? s.labels : [], notes: s ? s.notes : null,
         nowLbl: info.nowLbl, prevLbl: info.prevLbl, kind: 'money', fmt: fmtMoney, height: height, mini: mini, title: title,
-        emptyText: 'No orders from this source in this period.',
+        emptyText: emailType === 'All' ? 'No orders from this source in this period.' : 'No ' + emailType + ' sales from this source in this period.',
         pointLabel: function (i, w) { return info.point(s.labels[i], w); }, ticks: function (W) { return info.ticks(s.labels, W); } };
     };
     var hasPrev = function (name) { var s = seriesOf(name); return !!s && s[key][1].some(function (v) { return v != null; }); };
-    var tot = emailData.total;
+    var set = emailSet(), tot = set.total, allTot = emailData.types.All ? emailData.types.All.total : null;
+    var share = emailType !== 'All' && tot && allTot && allTot.sales[0] ? tot.sales[0] / allTot.sales[0] : null;
+    document.getElementById('email-type-note').textContent = emailType === 'All' ? '' :
+      (emailType === 'Abandoned Cart' ? 'UTM Campaign contains "abandoned". ' : 'Every email & SMS sale that is not Abandoned Cart. ') +
+      (share == null ? '' : fmtPct(share).replace('+', '') + ' of email & SMS sales this month.');
+    var label = emailType === 'All' ? 'Email & SMS sales' : 'Email & SMS sales: ' + emailType;
     var hero = document.getElementById('email-hero');
     hero.innerHTML = '<div class="head-row"><div><div class="big">' + fmtMoney(tot ? tot.sales[0] : null) + '</div>' +
-      '<div class="kpi-label">Email &amp; SMS sales</div><div class="caption">Month to date ' + delta(tot ? tot.sales[2] : null, true) + ' vs ' +
+      '<div class="kpi-label">' + esc(label) + '</div><div class="caption">Month to date ' + delta(tot ? tot.sales[2] : null, true) + ' vs ' +
       (tot && tot.sales[1] ? fmtMoney(tot.sales[1]) : 'no data') + ' last month &middot; ' + fmtCount(tot ? tot.orders[0] : 0) + ' orders</div></div>' +
-      modeSeg('email', info, info.run) + '</div>' + legendHtml(info, hasPrev('All email & SMS')) + '<div class="ac" style="flex:1;margin-top:6px"></div>';
+      modeSeg('email', info, info.run) + '</div>' + legendHtml(info, hasPrev(emailGroup('All email & SMS'))) + '<div class="ac" style="flex:1;margin-top:6px"></div>';
     wireModes(hero);
-    areaChart(hero.querySelector('.ac'), mk('All email & SMS', 'Email & SMS sales ' + info.by, 300, false));
+    areaChart(hero.querySelector('.ac'), mk(emailGroup('All email & SMS'), label + ' ' + info.by, 300, false));
     // Source cards (right of the hero): number + mini chart, in the configured source order.
-    var bySrc = {}; emailData.bySource.forEach(function (r) { bySrc[r.source] = r; });
-    var sources = Object.keys(emailTrends.projects).filter(function (n) { return n !== 'All email & SMS' && EMAIL_TYPES.indexOf(n) < 0; });
+    var bySrc = {}; set.bySource.forEach(function (r) { bySrc[r.source] = r; });
+    var sources = Object.keys(emailTrends.projects).filter(function (n) { return n !== 'All email & SMS' && n.indexOf(' | ') < 0; });
     var grid = document.getElementById('email-kpis');
     grid.querySelectorAll('.kpi').forEach(function (n) { n.remove(); });
     sources.slice(0, 3).forEach(function (src) {
@@ -839,45 +863,29 @@
         '<div class="caption">MTD ' + delta(r ? r.sales[2] : null, true) + ' vs ' + (r && r.sales[1] ? fmtMoney(r.sales[1]) : 'no data') +
         ' &middot; ' + fmtCount(r ? r.orders[0] : 0) + ' orders</div><div class="ac" style="margin-top:10px"></div>';
       grid.appendChild(card);
-      areaChart(card.querySelector('.ac'), mk(src, sourceLabel(src) + ' ' + info.by, 72, true));
+      areaChart(card.querySelector('.ac'), mk(emailGroup(src), sourceLabel(src) + ' ' + info.by, 72, true));
     });
     // Fourth card: total email & SMS orders, so the 2x2 next to the hero is full.
-    var oc = document.createElement('article'), ok = run ? 'ordersCum' : 'orders', os = seriesOf('All email & SMS');
+    var oc = document.createElement('article'), ok = run ? 'ordersCum' : 'orders', os = seriesOf(emailGroup('All email & SMS'));
     oc.className = 'card kpi';
     oc.innerHTML = '<div class="big">' + fmtCount(tot ? tot.orders[0] : 0) + '</div><div class="kpi-label">Email &amp; SMS orders</div>' +
       '<div class="caption">MTD ' + delta(tot && tot.orders[1] ? tot.orders[0] / tot.orders[1] - 1 : null, true) + ' vs ' +
       (tot && tot.orders[1] ? fmtCount(tot.orders[1]) : 'no data') + '</div><div class="ac" style="margin-top:10px"></div>';
     grid.appendChild(oc);
-    var om = mk('All email & SMS', 'Email & SMS orders ' + info.by, 72, true);
+    var om = mk(emailGroup('All email & SMS'), 'Email & SMS orders ' + info.by, 72, true);
     om.now = os ? os[ok][0] : []; om.prev = period === 'yearly' || !os ? null : os[ok][1]; om.kind = 'count'; om.fmt = fmtCount;
     areaChart(oc.querySelector('.ac'), om);
     // One full chart per source.
     var charts = document.getElementById('email-charts');
     charts.innerHTML = sources.map(function (src, i) {
-      return '<article class="card" id="email-chart-' + i + '"><h2>' + esc(sourceLabel(src)) + ' sales ' + info.by + '</h2>' +
-        legendHtml(info, hasPrev(src)) + '<div class="ac"></div></article>';
+      return '<article class="card" id="email-chart-' + i + '"><h2>' + esc(sourceLabel(src)) + (emailType === 'All' ? '' : ': ' + esc(emailType)) + ' sales ' + info.by + '</h2>' +
+        legendHtml(info, hasPrev(emailGroup(src))) + '<div class="ac"></div></article>';
     }).join('');
     sources.forEach(function (src, i) {
-      areaChart(charts.querySelector('#email-chart-' + i + ' .ac'), mk(src, sourceLabel(src) + ' sales ' + info.by, 220, false));
-    });
-    // Abandoned Cart vs Regular Sales: month-to-date number (daily running total at the
-    // latest day, vs last month on the same day), share of email & SMS sales, and a chart.
-    var typesEl = document.getElementById('email-types');
-    typesEl.innerHTML = EMAIL_TYPES.map(function (t, i) {
-      var d = (emailTrends.projects[t] || {}).daily, sc = d ? d.salesCum : [[], []], oc = d ? d.ordersCum : [[], []];
-      var li = lastIndex(sc[0]), now = li >= 0 ? sc[0][li] : null, prev = li >= 0 ? sc[1][li] : null;
-      var share = now != null && tot && tot.sales[0] ? now / tot.sales[0] : null;
-      return '<article class="card" id="email-type-' + i + '"><div class="big">' + fmtMoney(now) + '</div>' +
-        '<div class="kpi-label">' + esc(t) + '</div><div class="caption">MTD ' + delta(now != null && prev ? now / prev - 1 : null, true) +
-        ' vs ' + (prev ? fmtMoney(prev) : 'no data') + ' &middot; ' + fmtCount(li >= 0 ? oc[0][li] : 0) + ' orders &middot; ' +
-        (share == null ? 'n/a' : fmtPct(share).replace('+', '')) + ' of email &amp; SMS sales</div>' +
-        legendHtml(info, hasPrev(t)) + '<div class="ac"></div></article>';
-    }).join('');
-    EMAIL_TYPES.forEach(function (t, i) {
-      areaChart(typesEl.querySelector('#email-type-' + i + ' .ac'), mk(t, t + ' sales ' + info.by, 220, false));
+      areaChart(charts.querySelector('#email-chart-' + i + ' .ac'), mk(emailGroup(src), sourceLabel(src) + ' sales ' + info.by, 220, false));
     });
   }
-  var EMAIL_TYPES = ['Abandoned Cart', 'Regular Sales'];
+
 
   function renderEmailTable() {
     var cols = [
@@ -889,7 +897,7 @@
       { label: 'Orders MTD', get: function (r) { return r.orders[0]; } }
     ];
     var c = cols[emailSort.col];
-    var rows = emailData.funnels.slice().sort(function (a, b) {
+    var rows = emailSet().funnels.slice().sort(function (a, b) {
       var x = c.get(a), y = c.get(b);
       if (x == null) return 1; if (y == null) return -1;
       return (x < y ? -1 : x > y ? 1 : 0) * emailSort.dir;

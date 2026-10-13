@@ -99,24 +99,25 @@ const EMAIL_HEADER_ROW = 4;
 const EMAIL_TOP_TAB = 'Email Top 10';
 const EMAIL_TOP_HEADER_ROW = 3;
 
-// Top 10 per email/SMS source, in the order the notebook wrote them.
+// Top 10 per email/SMS source and email type (All / Abandoned Cart / Regular Sales),
+// in the order the notebook wrote them.
 // A row with no rank is that source's blank-field total (or an empty block).
 function emailTop_() {
   const ws = SpreadsheetApp.getActive().getSheetByName(EMAIL_TOP_TAB);
   if (!ws) return [];
   const last = ws.getLastRow();
   const values = last > EMAIL_TOP_HEADER_ROW
-    ? ws.getRange(EMAIL_TOP_HEADER_ROW + 1, 1, last - EMAIL_TOP_HEADER_ROW, 7).getValues() : [];
-  const bySource = {}, order = [];
+    ? ws.getRange(EMAIL_TOP_HEADER_ROW + 1, 1, last - EMAIL_TOP_HEADER_ROW, 8).getValues() : [];
+  const blocks = {}, order = [];
   values.forEach(function (r) {
-    const src = String(r[0]);
+    const src = String(r[0]), type = String(r[7] || 'All'), key = type + '\u0000' + src;
     if (!src) return;
-    if (!bySource[src]) { bySource[src] = { source: src, field: String(r[1]), top: [], untagged: null }; order.push(src); }
+    if (!blocks[key]) { blocks[key] = { source: src, type: type, field: String(r[1]), top: [], untagged: null }; order.push(key); }
     const item = { rank: num_(r[2]), content: String(r[3]), sales: num_(r[4]), orders: num_(r[5]), share: num_(r[6]) };
-    if (item.rank !== null) bySource[src].top.push(item);
-    else if (item.content) bySource[src].untagged = item;
+    if (item.rank !== null) blocks[key].top.push(item);
+    else if (item.content) blocks[key].untagged = item;
   });
-  return order.map(function (s) { return bySource[s]; });
+  return order.map(function (k) { return blocks[k]; });
 }
 
 function getEmail() {
@@ -125,19 +126,21 @@ function getEmail() {
   const windows = ws.getRange('B1:C2').getDisplayValues();
   const last = ws.getLastRow();
   const rows = (last > EMAIL_HEADER_ROW
-    ? ws.getRange(EMAIL_HEADER_ROW + 1, 1, last - EMAIL_HEADER_ROW, 7).getValues() : [])
+    ? ws.getRange(EMAIL_HEADER_ROW + 1, 1, last - EMAIL_HEADER_ROW, 8).getValues() : [])
     .filter(function (r) { return r[0] !== ''; })
     .map(function (r) {
       return { funnel: String(r[0]), source: String(r[1]), sales: [num_(r[2]), num_(r[3]), num_(r[4])],
-               orders: [num_(r[5]), num_(r[6])] };
+               orders: [num_(r[5]), num_(r[6])], type: String(r[7] || 'All') };
     });
-  return {
-    current: windows[0], prior: windows[1],
-    funnels: rows.filter(function (r) { return r.funnel !== 'All funnels' && r.funnel !== 'All email & SMS'; }),
-    bySource: rows.filter(function (r) { return r.funnel === 'All funnels'; }),
-    total: rows.filter(function (r) { return r.funnel === 'All email & SMS'; })[0] || null,
-    top: emailTop_()
-  };
+  // One set per email type for the page's filter: { All: {...}, 'Abandoned Cart': {...}, 'Regular Sales': {...} }
+  const types = {};
+  rows.forEach(function (r) {
+    const t = types[r.type] || (types[r.type] = { funnels: [], bySource: [], total: null });
+    if (r.funnel === 'All funnels') t.bySource.push(r);
+    else if (r.funnel === 'All email & SMS') t.total = r;
+    else t.funnels.push(r);
+  });
+  return { current: windows[0], prior: windows[1], types: types, top: emailTop_() };
 }
 
 const TRENDS_TAB = 'Q3 Trends';
