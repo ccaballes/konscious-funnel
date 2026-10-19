@@ -145,6 +145,25 @@
   .bars .pct { text-align: right; font-size: 13px; }
   .hit { position: absolute; inset: -3px 0; }
 
+  /* paired bars: one channel's share, this month (lavender) over last month (light blue) */
+  .pair { display: grid; grid-template-columns: minmax(80px, 130px) minmax(0, 1fr) auto auto; gap: 10px 12px; align-items: center; margin-top: 12px; }
+  .pair .name { color: var(--text-secondary); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pbars { position: relative; display: grid; gap: 2px; }
+  .pbars .b { display: block; height: 8px; min-width: 2px; border-radius: 0 4px 4px 0; }
+  .pbars .b.prev { background: var(--prev); }
+  .pbars .b.now { background: var(--now); }
+  .pair .pv { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .pv .was { display: block; color: var(--text-muted); font-size: 11px; }
+
+  /* written report: bottom line, takeaways, checks */
+  .callout { border-left: 3px solid var(--accent); }
+  .report p, .report li { color: var(--text-secondary); }
+  .report p { margin: 6px 0 0; }
+  .report b { color: var(--text-primary); }
+  .report h3 { font-size: 14px; font-weight: 700; color: var(--text-primary); margin: 0; }
+  .report ol { margin: 10px 0 0; padding-left: 22px; display: grid; gap: 12px; }
+  .report ol p { margin-top: 2px; }
+
   /* tables */
   .scroll { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -157,6 +176,9 @@
   tfoot td { font-weight: 700; border-bottom: 0; border-top: 2px solid var(--border); }
   td.content { max-width: 340px; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
   td.content.wrap { white-space: normal; max-width: none; min-width: 240px; overflow-wrap: anywhere; }
+  table.static th { cursor: default; }
+  td.indent { padding-left: 26px; }
+  tr.subtotal td { font-style: italic; color: var(--text-secondary); }
   .share { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
   .share .track2 { width: 80px; height: 8px; background: var(--neutral); border-radius: 4px; overflow: hidden; }
   .share .fill { display: block; height: 100%; background: var(--now); border-radius: 0 4px 4px 0; }
@@ -206,6 +228,7 @@
     <nav id="nav" aria-label="Pages">
       <p class="nav-label">Navigation</p>
       <button class="nav-item" data-go="refunds">Refunds &amp; Gross</button>
+      <button class="nav-item" data-go="revenue">MTD Revenue Report</button>
       <button class="nav-item" data-go="all">All projects</button>
       <button class="nav-item" data-go="email">Email &amp; SMS</button>
       <p class="nav-label">Brands</p>
@@ -307,6 +330,56 @@
         <div class="scroll"><table id="refund-table"></table></div>
       </section>
     </div>
+
+    <!-- MTD Revenue Report: a one-off report typed in by hand. The numbers live in REVENUE (script below);
+         the text here is written for them, so update both together. -->
+    <div id="view-revenue" hidden>
+      <p class="note" style="margin:0 0 16px">Assumes both months cover the same days (1st to 19th). If the September figures are full-month totals, this comparison would be misleading.</p>
+      <section class="card report callout" style="margin-bottom:16px">
+        <h2>Bottom line</h2>
+        <p>On the surface October is up 4.3%, but the core channels are down 6.4% and the backend figure (C100) is down 6.7%. Until the "Other" spike is explained, treat the growth as <b>unconfirmed</b>.</p>
+      </section>
+      <div class="tiles" id="rev-tiles"></div>
+      <div class="big-grid">
+        <section class="card">
+          <h2>Where the change came from</h2>
+          <p class="note">Change in GA revenue by channel, October vs September (day 1 to 19). Lavender bars grew, coral bars shrank. Hover a bar for both months.</p>
+          <div class="bars" id="rev-bars" style="grid-template-columns:minmax(100px, 150px) 1fr 84px"></div>
+          <p class="note" id="rev-net" style="margin:12px 0 0"></p>
+        </section>
+        <section class="card">
+          <h2>Share of GA total revenue</h2>
+          <p class="note">Each channel's slice of GA total revenue. Hover a row for the dollar amounts.</p>
+          <div id="rev-share"></div>
+        </section>
+      </div>
+      <section class="card report" style="margin-bottom:16px">
+        <h2>Key takeaways</h2>
+        <ol>
+          <li><h3>The +4.3% topline growth is not coming from the main channels.</h3>
+            <p>Google, Facebook and Email together are <b>down 6.4%</b> ($4.75M to $4.45M). All of the growth, and more, comes from "Other channels," which jumped <b>$536K (+75%)</b>. That one bucket is the reason the topline looks healthy.</p></li>
+          <li><h3>Facebook's drop and the "Other" jump look like mirror images.</h3>
+            <p>Facebook lost 9.5 points of share while "Other" gained 8.9 points. When one channel loses about the same share another gains, it often means <b>revenue is being credited to a different channel, not actually lost</b>. Common causes include broken or missing UTM tags on FB ads, landing URL changes, or FB traffic falling into Direct or Unassigned. Check this before concluding that Facebook performance fell 17%.</p></li>
+          <li><h3>C100 and GA disagree on direction.</h3>
+            <p>C100 is <b>down 6.7%</b> while GA Total is <b>up 4.3%</b>. If C100 is the backend or source-of-truth figure, this gap is a red flag: GA may be overcounting this month, possibly through duplicate purchase events or the same "Other" spike. C100 was about 10.3% of GA revenue in September and about 9.2% in October, so the two are drifting apart.</p></li>
+          <li><h3>The real wins are Email and Google.</h3>
+            <p>Email is up <b>21.8%</b>. It's the smallest channel but the fastest growing, so it's worth identifying which campaigns drove it. Google is growing steadily at <b>+3.4%</b>.</p></li>
+        </ol>
+      </section>
+      <section class="card" style="margin-bottom:16px">
+        <h2>Summary table</h2>
+        <p class="note">Month to date, day 1 to 19 of each month. Other channels = GA Total minus Google, Facebook and Email.</p>
+        <div class="scroll"><table class="static" id="rev-table"></table></div>
+      </section>
+      <section class="card report">
+        <h2>Recommended checks before sharing widely</h2>
+        <ol>
+          <li>Break "Other channels" down into Direct, Organic, Referral, Unassigned and so on, to find which one grew.</li>
+          <li>Audit FB campaign UTMs and landing URLs for any changes made in late September or October.</li>
+          <li>Reconcile C100 against GA transactions, comparing order counts as well as revenue, to rule out duplicate purchase events.</li>
+        </ol>
+      </section>
+    </div>
   </main>
 </div>
 <div id="tip" role="tooltip"></div>
@@ -357,7 +430,9 @@
   // calls run in parallel, and asking again while one is in flight reuses it. A failed call is
   // dropped so "Try again" refetches.
   var SERVER = { q1: 'getQ1', trends: 'getTrends', q2: 'getQ2', email: 'getEmail', emailTrends: 'getEmailTrends', refunds: 'getRefunds' };
-  var NEEDS = { all: ['q1', 'trends'], project: ['q1', 'trends', 'q2'], email: ['q1', 'email', 'emailTrends'], refunds: ['q1', 'refunds'] };
+  // The revenue report's numbers are in this page; it waits on q1 only for the side menu.
+  var NEEDS = { all: ['q1', 'trends'], project: ['q1', 'trends', 'q2'], email: ['q1', 'email', 'emailTrends'], refunds: ['q1', 'refunds'],
+    revenue: ['q1'] };
   var ON_LOAD = {
     q1: function (d) { q1Data = d; buildNav(); renderBars(d.projects); renderTable(d); },
     trends: function (d) { trends = d; },
@@ -395,7 +470,7 @@
   function pushUrl() {
     if (!hasUrlApi) return;
     google.script.history.push(null, view === 'project' && currentProject ? { project: currentProject }
-      : view === 'email' || view === 'refunds' ? { view: view } : {});
+      : view === 'email' || view === 'refunds' || view === 'revenue' ? { view: view } : {});
   }
 
   // ---------- navigation ----------
@@ -471,7 +546,7 @@
   function setView(v, noPush) {
     view = v;
     setTitle(); markNav();
-    document.getElementById('period-seg').hidden = v === 'refunds';   // that page is daily only
+    document.getElementById('period-seg').hidden = v === 'refunds' || v === 'revenue';   // daily only / no charts over time
     if (!noPush) pushUrl();
     var need = NEEDS[v];
     if (need.every(function (n) { return loaded[n]; })) { renderView(); return Promise.resolve(); }
@@ -485,17 +560,19 @@
   }
   function openProject(name) { currentProject = name; setView('project'); }
   function showPanels(on) {
-    document.getElementById('metrics').hidden = !on || view === 'email' || view === 'refunds';
+    document.getElementById('metrics').hidden = !on || view === 'email' || view === 'refunds' || view === 'revenue';
     document.getElementById('view-all').hidden = !on || view !== 'all';
     document.getElementById('view-project').hidden = !on || view !== 'project';
     document.getElementById('view-email').hidden = !on || view !== 'email';
     document.getElementById('view-refunds').hidden = !on || view !== 'refunds';
+    document.getElementById('view-revenue').hidden = !on || view !== 'revenue';
   }
   function renderView() {
     ++viewSeq;   // a page that was still loading must not draw over this one
     setLoading(false); showPanels(true); setTitle(); markNav();
     if (view === 'email') { renderEmailPeriod(); renderEmail(); }
     else if (view === 'refunds') renderRefunds();
+    else if (view === 'revenue') renderRevenue();
     else { setPeriodText(); drawMetrics(); if (view === 'project') drawProject(); }
   }
   function setTitle() {
@@ -504,7 +581,7 @@
       var m = metaOf(currentProject);
       title.innerHTML = esc(m.brand) + '<span class="chip" title="' + esc(currentProject) + '">' + esc(m.platform) + '</span>';
     } else title.textContent = view === 'all' ? 'All projects' : view === 'email' ? 'Email & SMS'
-      : view === 'refunds' ? 'Refunds & Gross' : (currentProject || '');
+      : view === 'refunds' ? 'Refunds & Gross' : view === 'revenue' ? 'MTD Revenue Report' : (currentProject || '');
   }
   function setPeriodText() {
     if (!q1Data) return;
@@ -1102,12 +1179,98 @@
     });
   }
 
+  // ---------- MTD Revenue Report ----------
+  // A one-off report typed in by hand: C100 and GA revenue are not on the dashboard sheet.
+  // Changes, shares and Other channels (GA total minus the named channels) are worked out from
+  // these numbers. The text in #view-revenue is written for them, so update both together.
+  var REVENUE = {
+    windows: ['Sep 1 to 19', 'Oct 1 to 19'],
+    c100: [562565, 524893],
+    total: [5467031, 5700829],
+    channels: [['Google', 1963909, 2031660], ['Facebook', 2497112, 2064211], ['Email', 288834, 351871]]
+  };
+  function signed(f, v) { return (v > 0 ? '+' : '') + f(v); }
+  function renderRevenue() {
+    var R = REVENUE, w = R.windows;
+    document.getElementById('period').textContent = 'Month to date: ' + w[1] + ' vs ' + w[0] +
+      '. Typed in from the Oct 19 report, not read from the dashboard sheet.';
+    var chg = function (v) { return v[1] - v[0]; }, pct = function (v) { return v[0] ? v[1] / v[0] - 1 : null; };
+    var sum = function (i) { return R.channels.reduce(function (s, c) { return s + c[i + 1]; }, 0); };
+    var core = [sum(0), sum(1)];
+    // Other's growth is not counted as good news until it is explained (takeaway 2), so it reads neutral.
+    var chans = R.channels.map(function (c) { return { name: c[0], v: [c[1], c[2]], good: true }; })
+      .concat([{ name: 'Other channels', v: [R.total[0] - core[0], R.total[1] - core[1]], good: null }]);
+    var share = function (c, i) { return c.v[i] / R.total[i]; };
+
+    document.getElementById('rev-tiles').innerHTML = [
+      { label: 'GA Total Revenue', v: R.total, fmt: fmtMoney, good: true },
+      { label: 'C100', v: R.c100, fmt: fmtCount, good: true },
+      { label: 'Google + Facebook + Email', v: core, fmt: fmtMoney, good: true },
+      { label: 'Other channels', v: chans[3].v, fmt: fmtMoney, good: null, note: 'Not explained yet' }
+    ].map(function (t) {
+      return '<article class="card kpi"><div class="big">' + t.fmt(t.v[1]) + '</div><div class="kpi-label">' + t.label + '</div>' +
+        '<div class="caption">' + delta(pct(t.v), t.good) + ' vs ' + t.fmt(t.v[0]) + ' in Sep' + (t.note ? ' &middot; ' + t.note : '') + '</div></article>';
+    }).join('');
+
+    // Where the change came from: dollar change per channel, biggest gain first.
+    var rows = chans.slice().sort(function (a, b) { return chg(b.v) - chg(a.v); });
+    var max = Math.max.apply(null, rows.map(function (c) { return Math.abs(chg(c.v)); }).concat([1]));
+    var bars = document.getElementById('rev-bars');
+    bars.innerHTML = rows.map(function (c, i) {
+      var v = chg(c.v);
+      return '<div class="name" title="' + esc(c.name) + '">' + esc(c.name) + '</div>' +
+        '<div class="track"><div class="bar ' + (v >= 0 ? 'pos' : 'neg') + '" style="width:' + (Math.abs(v) / max * 50) + '%"></div>' +
+        '<div class="hit" data-i="' + i + '"></div></div><div class="pct">' + signed(fmtMoney, v) + '</div>';
+    }).join('');
+    bars.querySelectorAll('.hit').forEach(function (h) {
+      var c = rows[+h.dataset.i];
+      h.addEventListener('mousemove', function (e) {
+        showTip(e, '<b>' + esc(c.name) + '</b><br>' + w[1] + ': ' + fmtMoney(c.v[1]) + '<br>' + w[0] + ': ' + fmtMoney(c.v[0]) +
+          '<br>Change: ' + signed(fmtMoney, chg(c.v)) + ' (' + fmtPct(pct(c.v)) + ')');
+      });
+      h.addEventListener('mouseleave', hideTip);
+    });
+    document.getElementById('rev-net').textContent = 'Net change in GA Total Revenue: ' + signed(fmtMoney, chg(R.total)) +
+      ' (' + fmtPct(pct(R.total)) + ').';
+
+    // Share of GA total: this month over last month per channel, largest September share first.
+    var byShare = chans.slice().sort(function (a, b) { return share(b, 0) - share(a, 0); });
+    var smax = Math.max.apply(null, byShare.map(function (c) { return Math.max(share(c, 0), share(c, 1)); }));
+    var sh = document.getElementById('rev-share');
+    sh.innerHTML = legendHtml({ nowLbl: w[1], prevLbl: w[0], period: 'daily' }, true) + '<div class="pair">' + byShare.map(function (c, i) {
+      return '<div class="name" title="' + esc(c.name) + '">' + esc(c.name) + '</div>' +
+        '<div class="pbars"><span class="b now" style="width:' + (share(c, 1) / smax * 100) + '%"></span>' +
+        '<span class="b prev" style="width:' + (share(c, 0) / smax * 100) + '%"></span><div class="hit" data-i="' + i + '"></div></div>' +
+        '<div class="pv">' + fmtRate(share(c, 1)) + '<span class="was">was ' + fmtRate(share(c, 0)) + '</span></div>' +
+        '<div class="pv">' + delta(share(c, 1) - share(c, 0), null, fmtPts) + '</div>';
+    }).join('') + '</div>';
+    sh.querySelectorAll('.hit').forEach(function (h) {
+      var c = byShare[+h.dataset.i];
+      h.addEventListener('mousemove', function (e) {
+        showTip(e, '<b>' + esc(c.name) + '</b><br>' + w[1] + ': ' + fmtMoney(c.v[1]) + ' (' + fmtRate(share(c, 1)) + ')<br>' +
+          w[0] + ': ' + fmtMoney(c.v[0]) + ' (' + fmtRate(share(c, 0)) + ')<br>Shift: ' + fmtPts(share(c, 1) - share(c, 0)));
+      });
+      h.addEventListener('mouseleave', hideTip);
+    });
+
+    // Summary table: C100, GA total and its channels (indented), then the three named channels combined.
+    var lines = [{ name: 'C100', v: R.c100, fmt: fmtCount, good: true }, { name: 'GA Total Revenue', v: R.total, fmt: fmtMoney, good: true }]
+      .concat(chans.map(function (c) { return { name: c.name, v: c.v, fmt: fmtMoney, good: c.good, cls: 'indent' }; }))
+      .concat([{ name: 'Google + Facebook + Email combined', v: core, fmt: fmtMoney, good: true, row: 'subtotal' }]);
+    document.getElementById('rev-table').innerHTML = '<thead><tr><th>Metric</th><th>Sep MTD</th><th>Oct MTD</th><th>Change</th><th>% Change</th></tr></thead><tbody>' +
+      lines.map(function (r) {
+        return '<tr' + (r.row ? ' class="' + r.row + '"' : '') + '><td' + (r.cls ? ' class="' + r.cls + '"' : '') + '>' + esc(r.name) + '</td>' +
+          '<td>' + r.fmt(r.v[0]) + '</td><td>' + r.fmt(r.v[1]) + '</td><td>' + signed(r.fmt, chg(r.v)) + '</td><td>' + delta(pct(r.v), r.good) + '</td></tr>';
+      }).join('') + '</tbody>';
+  }
+
   // ---------- load ----------
-  // Read the page from the link first (no server call), so a ?project=, ?view=email or
-  // ?view=refunds link fetches its own data straight away instead of waiting for the All projects data.
+  // Read the page from the link first (no server call), so a ?project=, ?view=email, ?view=refunds or
+  // ?view=revenue link fetches its own data straight away instead of waiting for the All projects data.
+  var LINK_VIEWS = ['email', 'refunds', 'revenue'];
   function start(prm) {
     if (prm.project) currentProject = prm.project;
-    setView(prm.project ? 'project' : prm.view === 'email' || prm.view === 'refunds' ? prm.view : 'all', true).then(prefetch, prefetch);
+    setView(prm.project ? 'project' : LINK_VIEWS.indexOf(prm.view) >= 0 ? prm.view : 'all', true).then(prefetch, prefetch);
   }
   if (hasUrlApi) google.script.url.getLocation(function (loc) { start(loc.parameter || {}); });
   else start({});
