@@ -110,6 +110,8 @@
   .stack { display: grid; gap: 16px; margin-bottom: 16px; }
   .filter-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 16px; margin-bottom: 16px; }
+  .select { background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 10px; font: inherit; font-size: 13px; max-width: 100%; }
 
   /* charts */
   .ac { position: relative; }
@@ -205,6 +207,7 @@
       <p class="nav-label">Navigation</p>
       <button class="nav-item" data-go="all">All projects</button>
       <button class="nav-item" data-go="email">Email &amp; SMS</button>
+      <button class="nav-item" data-go="refunds">Refunds &amp; Gross</button>
       <p class="nav-label">Brands</p>
       <div id="nav-projects"></div>
     </nav>
@@ -285,6 +288,25 @@
         <div class="scroll"><table id="email-table"></table></div>
       </section>
     </div>
+
+    <div id="view-refunds" hidden>
+      <div class="filter-bar">
+        <label class="caption" for="refund-account">Account</label>
+        <select class="select" id="refund-account"></select>
+        <span class="caption" id="refund-note"></span>
+      </div>
+      <div class="big-grid">
+        <article class="card" id="chart-r-gross"></article>
+        <article class="card" id="chart-r-refunds"></article>
+        <article class="card" id="chart-r-rate"></article>
+        <article class="card" id="chart-r-net"></article>
+      </div>
+      <section class="card">
+        <h2>Refunds by account</h2>
+        <p class="note">Month to date vs the same days last month. Refund rate = Refunds &divide; Gross sales; its change is in percentage points (pts). Click an account to show it in the charts, or a column to sort.</p>
+        <div class="scroll"><table id="refund-table"></table></div>
+      </section>
+    </div>
   </main>
 </div>
 <div id="tip" role="tooltip"></div>
@@ -300,13 +322,17 @@
   function fmtSpend(v) { return v === 0 ? 'no ad data' : fmtMoney(v); }
   function fmtPct(v) { return v == null ? 'n/a' : (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%'; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function fmtRate(v) { return v == null ? 'n/a' : (v * 100).toFixed(1) + '%'; }
+  // A change in a rate, in percentage points: 0.012 -> +1.2 pts.
+  function fmtPts(v) { return v == null ? 'n/a' : (v > 0 ? '+' : '') + (v * 100).toFixed(1) + ' pts'; }
   // higherIsGood: true for Sales/Orders/ROAS, null for Spend (direction is neither good nor bad).
-  function delta(v, higherIsGood) {
+  // fmt: how the change reads (fmtPct by default, fmtPts for a rate).
+  function delta(v, higherIsGood, fmt) {
     if (v == null) return '<span class="delta flat">n/a</span>';
-    var arrow = v > 0 ? '↑' : v < 0 ? '↓' : '–';
+    var f = fmt || fmtPct, arrow = v > 0 ? '↑' : v < 0 ? '↓' : '–';
     var cls = 'flat';
     if (higherIsGood !== null && v !== 0) cls = (v > 0) === higherIsGood ? 'good' : 'bad';
-    return '<span class="delta ' + cls + '" aria-label="' + (v > 0 ? 'up ' : v < 0 ? 'down ' : 'flat ') + fmtPct(Math.abs(v)) + '">' + arrow + ' ' + fmtPct(v).replace('-', '') + '</span>';
+    return '<span class="delta ' + cls + '" aria-label="' + (v > 0 ? 'up ' : v < 0 ? 'down ' : 'flat ') + f(Math.abs(v)) + '">' + arrow + ' ' + f(v).replace('-', '') + '</span>';
   }
   var tip = document.getElementById('tip');
   function showTip(e, html) {
@@ -317,10 +343,12 @@
   function hideTip() { tip.style.display = 'none'; }
 
   // ---------- state ----------
-  var q1Data = null, q2Data = null, emailData = null, trends = null, emailTrends = null;
+  var q1Data = null, q2Data = null, emailData = null, trends = null, emailTrends = null, refundsData = null;
   var view = 'all', currentProject = null, period = 'daily';
-  var mode = { sales: 'each', orders: 'each', spend: 'each', roas: 'each', email: 'each' };
+  var mode = { sales: 'each', orders: 'each', spend: 'each', roas: 'each', email: 'each',
+    rGross: 'each', rRefunds: 'each', rRate: 'each', rNet: 'each' };
   var emailType = 'All';   // Email & SMS filter: All / Abandoned Cart / Regular Sales
+  var refundAccount = 'All accounts';   // Refunds & Gross filter
   var hasUrlApi = !!(google.script.url && google.script.history);
   var busy = true;         // a page's data is loading (or failed): charts wait, since they measure their box
 
@@ -328,14 +356,15 @@
   // One server call per dataset, made once and shared: a page asks only for what it shows, the
   // calls run in parallel, and asking again while one is in flight reuses it. A failed call is
   // dropped so "Try again" refetches.
-  var SERVER = { q1: 'getQ1', trends: 'getTrends', q2: 'getQ2', email: 'getEmail', emailTrends: 'getEmailTrends' };
-  var NEEDS = { all: ['q1', 'trends'], project: ['q1', 'trends', 'q2'], email: ['q1', 'email', 'emailTrends'] };
+  var SERVER = { q1: 'getQ1', trends: 'getTrends', q2: 'getQ2', email: 'getEmail', emailTrends: 'getEmailTrends', refunds: 'getRefunds' };
+  var NEEDS = { all: ['q1', 'trends'], project: ['q1', 'trends', 'q2'], email: ['q1', 'email', 'emailTrends'], refunds: ['q1', 'refunds'] };
   var ON_LOAD = {
     q1: function (d) { q1Data = d; buildNav(); renderBars(d.projects); renderTable(d); },
     trends: function (d) { trends = d; },
     q2: function (d) { q2Data = d; buildColors(d.projects); },
     email: function (d) { emailData = d; },
-    emailTrends: function (d) { emailTrends = d; }
+    emailTrends: function (d) { emailTrends = d; },
+    refunds: function (d) { refundsData = d; }
   };
   var loaded = {}, inflight = {};
   function load(name) {
@@ -366,7 +395,7 @@
   function pushUrl() {
     if (!hasUrlApi) return;
     google.script.history.push(null, view === 'project' && currentProject ? { project: currentProject }
-      : view === 'email' ? { view: 'email' } : {});
+      : view === 'email' || view === 'refunds' ? { view: view } : {});
   }
 
   // ---------- navigation ----------
@@ -442,6 +471,7 @@
   function setView(v, noPush) {
     view = v;
     setTitle(); markNav();
+    document.getElementById('period-seg').hidden = v === 'refunds';   // that page is daily only
     if (!noPush) pushUrl();
     var need = NEEDS[v];
     if (need.every(function (n) { return loaded[n]; })) { renderView(); return Promise.resolve(); }
@@ -455,15 +485,17 @@
   }
   function openProject(name) { currentProject = name; setView('project'); }
   function showPanels(on) {
-    document.getElementById('metrics').hidden = !on || view === 'email';
+    document.getElementById('metrics').hidden = !on || view === 'email' || view === 'refunds';
     document.getElementById('view-all').hidden = !on || view !== 'all';
     document.getElementById('view-project').hidden = !on || view !== 'project';
     document.getElementById('view-email').hidden = !on || view !== 'email';
+    document.getElementById('view-refunds').hidden = !on || view !== 'refunds';
   }
   function renderView() {
     ++viewSeq;   // a page that was still loading must not draw over this one
     setLoading(false); showPanels(true); setTitle(); markNav();
     if (view === 'email') { renderEmailPeriod(); renderEmail(); }
+    else if (view === 'refunds') renderRefunds();
     else { setPeriodText(); drawMetrics(); if (view === 'project') drawProject(); }
   }
   function setTitle() {
@@ -471,7 +503,8 @@
     if (view === 'project' && currentProject && q1Data) {
       var m = metaOf(currentProject);
       title.innerHTML = esc(m.brand) + '<span class="chip" title="' + esc(currentProject) + '">' + esc(m.platform) + '</span>';
-    } else title.textContent = view === 'all' ? 'All projects' : view === 'email' ? 'Email & SMS' : (currentProject || '');
+    } else title.textContent = view === 'all' ? 'All projects' : view === 'email' ? 'Email & SMS'
+      : view === 'refunds' ? 'Refunds & Gross' : (currentProject || '');
   }
   function setPeriodText() {
     if (!q1Data) return;
@@ -488,8 +521,9 @@
   function short(x) { return String(+x.toFixed(2)); }
   function fmtAxis(kind, v) {
     if (kind === 'roas') return short(v) + 'x';
-    var pre = kind === 'money' ? '$' : '';
-    return v >= 1e6 ? pre + short(v / 1e6) + 'M' : v >= 1e3 ? pre + short(v / 1e3) + 'k' : pre + short(v);
+    if (kind === 'pct') return short(v * 100) + '%';
+    var pre = (v < 0 ? '-' : '') + (kind === 'money' ? '$' : ''), a = Math.abs(v);
+    return a >= 1e6 ? pre + short(a / 1e6) + 'M' : a >= 1e3 ? pre + short(a / 1e3) + 'k' : pre + short(a);
   }
   // Monotone cubic segments (no overshoot past the real values). pts: [[x, y], ...]
   function monoSegments(pts) {
@@ -517,25 +551,27 @@
     return out;
   }
 
-  // opts: { now, prev, notes, labels, kind: 'money'|'count'|'roas', fmt, height, mini, ref, nowLbl, prevLbl, pointLabel(i, which) }
+  // opts: { now, prev, notes, labels, kind: 'money'|'count'|'roas'|'pct', fmt, height, mini, ref, nowLbl, prevLbl,
+  //         pointLabel(i, which), change(now, prev) for the tooltip (default: % change) }
+  // Values below zero (net sales after refunds) extend the axis down; the area fills to the zero line.
   function areaChart(box, o) {
     var hasNow = o.now.some(function (v) { return v != null; }), hasPrev = (o.prev || []).some(function (v) { return v != null; });
     // A sales/orders series that is zero everywhere has nothing to draw (a filter with no matching
-    // orders). ROAS at 0x is kept: spend with no sales is a real signal.
-    var allZero = o.kind !== 'roas' && !o.now.concat(o.prev || []).some(function (v) { return v != null && v !== 0; });
+    // orders). ROAS at 0x and a 0% refund rate are kept: they are real signals.
+    var allZero = o.kind !== 'roas' && o.kind !== 'pct' && !o.now.concat(o.prev || []).some(function (v) { return v != null && v !== 0; });
     if ((!hasNow && !hasPrev) || allZero) { box.innerHTML = '<p class="empty">' + esc(o.emptyText || 'No data for this period yet.') + '</p>'; return; }
     var W = Math.max(box.clientWidth, 120), H = o.height, mini = o.mini;
     var ml = mini ? 0 : 48, mr = mini ? 0 : 14, mt = mini ? 4 : 10, mb = mini ? 2 : 24;
     var n = o.labels.length;
     var vals = o.now.concat(o.prev || []).filter(function (v) { return v != null; });
-    var ymax = Math.max.apply(null, vals.concat([o.ref ? o.ref * 1.2 : 0, 0]));
-    var step = niceStep(ymax || 1, mini ? 2 : 4), top = Math.ceil((ymax || 1) / step) * step;
+    var ymax = Math.max.apply(null, vals.concat([o.ref ? o.ref * 1.2 : 0, 0])), ymin = Math.min.apply(null, vals.concat([0]));
+    var step = niceStep((ymax - ymin) || 1, mini ? 2 : 4), top = Math.ceil((ymax || 1) / step) * step, bot = Math.floor(ymin / step) * step;
     var x = function (i) { return ml + (n > 1 ? i / (n - 1) : 0.5) * (W - ml - mr); };
-    var y = function (v) { return mt + (1 - v / top) * (H - mt - mb); };
+    var y = function (v) { return mt + (top - v) / (top - bot) * (H - mt - mb); };
     var base = y(0), svg = '';
     if (!mini) {
       var g = '', ax = '';
-      for (var tv = 0; tv <= top + 1e-9; tv += step) {
+      for (var tv = bot; tv <= top + 1e-9; tv += step) {
         g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(tv) + '" y2="' + y(tv) + '"></line>';
         ax += '<text x="' + (ml - 8) + '" y="' + (y(tv) + 4) + '" text-anchor="end">' + fmtAxis(o.kind, tv) + '</text>';
       }
@@ -595,16 +631,17 @@
       if (o.prev) {
         html += '<br><b>' + esc(o.pointLabel(i, 1)) + '</b>: ' + (b == null ? 'no data' : o.fmt(b));
         if (o.notes && o.notes[1][i]) html += '<br><span style="color:var(--text-muted)">' + esc(o.notes[1][i]) + '</span>';
-        html += '<br>Change: ' + (a != null && b ? fmtPct(a / b - 1) : 'n/a');
+        html += '<br>Change: ' + (o.change ? o.change(a, b) : a != null && b ? fmtPct(a / b - 1) : 'n/a');
       }
       showTip(e, html);
     });
     el.querySelector('rect').addEventListener('mouseleave', function () { hov.style.display = 'none'; hideTip(); });
   }
 
-  // Labels for the selected period (from the notebook's Q3 Trends tab).
-  function periodInfo(src) {
-    var v = (src || trends).views[period] || { now: '', prev: '' };
+  // Labels for the selected period (from the notebook's Q3 Trends tab). per: a fixed period
+  // instead of the selected one (the Refunds & Gross page is daily only).
+  function periodInfo(src, per) {
+    var p = per || period, v = (src || trends).views[p] || { now: '', prev: '' };
     var mon = function (s) { return (s || '').split(' ')[0]; };
     var info = {
       daily: { each: 'Each day', run: 'Running total', roasRun: 'Month to date', by: 'by day',
@@ -619,15 +656,16 @@
       yearly: { each: 'Each year', run: null, roasRun: null, by: 'by year',
         point: function (lab) { return lab; },
         ticks: function (labels, W) { var s = Math.ceil(labels.length / Math.max(1, Math.floor(W / 60))); return labels.map(function (_, i) { return i; }).filter(function (i) { return i % s === 0; }); } }
-    }[period];
-    info.nowLbl = period === 'yearly' ? 'Each year' : v.now;
-    info.prevLbl = period === 'yearly' ? '' : v.prev;
+    }[p];
+    info.period = p;
+    info.nowLbl = p === 'yearly' ? 'Each year' : v.now;
+    info.prevLbl = p === 'yearly' ? '' : v.prev;
     return info;
   }
 
   function legendHtml(info, hasPrev) {
     return '<div class="legend"><span class="key"><span class="sw" style="background:var(--now)"></span>' + esc(info.nowLbl) + '</span>' +
-      (period === 'yearly' ? '' : '<span class="key"><span class="sw" style="background:var(--prev)"></span>' + esc(info.prevLbl) +
+      (info.period === 'yearly' ? '' : '<span class="key"><span class="sw" style="background:var(--prev)"></span>' + esc(info.prevLbl) +
       (hasPrev ? '' : ': no data uploaded') + '</span>') + '</div>';
   }
   function modeSeg(key, info, runLabel) {
@@ -638,7 +676,7 @@
   }
   function wireModes(el) {
     el.querySelectorAll('[data-chart]').forEach(function (b) {
-      b.addEventListener('click', function () { mode[b.dataset.chart] = b.dataset.mode; drawMetrics(); drawEmailCharts(); });
+      b.addEventListener('click', function () { mode[b.dataset.chart] = b.dataset.mode; drawMetrics(); drawEmailCharts(); drawRefundCharts(); });
     });
   }
 
@@ -648,7 +686,7 @@
   // Platform ROAS is left out of the report for now.
   function lastIndex(arr) { var k = -1; arr.forEach(function (v, i) { if (v != null) k = i; }); return k; }
   function drawMetrics() {
-    if (busy || !q1Data || !trends || view === 'email') return;
+    if (busy || !q1Data || !trends || (view !== 'all' && view !== 'project')) return;
     var name = view === 'project' ? currentProject : 'All projects';
     var row = view === 'project' ? q1Data.projects.filter(function (p) { return p.project === name; })[0] : q1Data.total;
     var tp = trends.projects[name] || {}, s = tp[period], daily = tp.daily;
@@ -695,7 +733,7 @@
     });
   }
   var resizeTimer = null;
-  window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(function () { drawMetrics(); drawEmailCharts(); }, 150); });
+  window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(function () { drawMetrics(); drawEmailCharts(); drawRefundCharts(); }, 150); });
 
   // ---------- All projects: bars + table ----------
   var METRICS = [
@@ -951,12 +989,125 @@
     });
   }
 
+  // ---------- Refunds & Gross ----------
+  // From the notebook's section 6 (Refunds MTD and Refunds Trends tabs). Daily only: each day
+  // this month vs the same day last month, per day or running (month to date). Refunds are a
+  // positive amount; Refund rate = Refunds / Gross sales; Net = Gross - Refunds.
+  var refundSort = { col: 1, dir: -1 };
+  // % change only from a positive base: a change from a negative net would read backwards.
+  function changeFrom(a, b) { return a != null && b > 0 ? fmtPct(a / b - 1) : 'n/a'; }
+  function refundRow(name) {
+    return name === 'All accounts' ? refundsData.total
+      : refundsData.accounts.filter(function (r) { return r.account === name; })[0] || null;
+  }
+  function renderRefunds() {
+    var d = refundsData;
+    if (busy || view !== 'refunds' || !d) return;
+    if (!refundRow(refundAccount)) refundAccount = 'All accounts';
+    document.getElementById('period').textContent = 'Month to date: ' + d.current[0] + ' to ' + d.current[1] +
+      ' vs ' + d.prior[0] + ' to ' + d.prior[1] + '. Latest data: ' + d.current[1] + '.';
+    document.getElementById('refund-account').innerHTML = ['All accounts'].concat(d.accounts.map(function (r) { return r.account; }))
+      .map(function (n) { return '<option value="' + esc(n) + '"' + (n === refundAccount ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('');
+    drawRefundCharts(); renderRefundTable();
+  }
+  document.getElementById('refund-account').addEventListener('change', function () { refundAccount = this.value; drawRefundCharts(); });
+  // Day of month of a 'yyyy-mm-dd' window end: how many days the window spans (it starts on the 1st).
+  function dayOf(s) { return +String(s).slice(-2) || 0; }
+  function coverageNote(row, d) {
+    var want = [dayOf(d.current[1]), dayOf(d.prior[1])], have = row ? row.days : [0, 0];
+    if (!have[1]) return 'No data uploaded for last month yet, so the changes show n/a. Upload one export covering ' +
+      d.prior[0] + ' to ' + d.prior[1] + ' to fill them in.';
+    if (have[0] < want[0] || have[1] < want[1]) return 'Uploads cover ' + have[0] + ' of ' + want[0] + ' days this month and ' +
+      have[1] + ' of ' + want[1] + ' days last month, so the changes compare uneven windows.';
+    return '';
+  }
+  function drawRefundCharts() {
+    var d = refundsData;
+    if (busy || view !== 'refunds' || !d) return;
+    var row = refundRow(refundAccount), s = d.trends.groups[refundAccount], info = periodInfo(d.trends, 'daily');
+    var pick = function (k) { return row ? row[k] : [null, null, null]; };
+    var kept = row && row.gross[0] ? row.net[0] / row.gross[0] : null;
+    document.getElementById('refund-note').textContent = coverageNote(row, d);
+    var charts = [
+      { id: 'chart-r-gross', key: 'rGross', label: 'Gross sales', m: pick('gross'), good: true, each: 'gross', run: 'grossCum',
+        runLabel: info.run, kind: 'money', fmt: fmtMoney, note: 'One time + recurring sales, before refunds.' },
+      { id: 'chart-r-refunds', key: 'rRefunds', label: 'Refunds', m: pick('refunds'), good: false, each: 'refunds', run: 'refundsCum',
+        runLabel: info.run, kind: 'money', fmt: fmtMoney, note: 'Money refunded that day, on orders from any date.' },
+      { id: 'chart-r-rate', key: 'rRate', label: 'Refund rate', m: pick('rate'), good: false, pts: true, each: 'rate', run: 'rateCum',
+        runLabel: info.roasRun, kind: 'pct', fmt: fmtRate,
+        note: 'Refunds ÷ Gross sales. One day can jump when older orders are refunded; Month to date is steadier.' },
+      { id: 'chart-r-net', key: 'rNet', label: 'Net sales', m: pick('net'), good: true, each: 'net', run: 'netCum',
+        runLabel: info.run, kind: 'money', fmt: fmtMoney,
+        note: 'Gross sales minus refunds.' + (kept == null ? '' : ' Month to date you keep ' + fmtRate(kept) + ' of gross sales.') }
+    ];
+    charts.forEach(function (c) {
+      var k = mode[c.key] === 'run' ? c.run : c.each, sr = s && s[k] ? s[k] : [[], []];
+      var el = document.getElementById(c.id);
+      el.innerHTML = '<div class="head-row"><div><div class="big">' + c.fmt(c.m[0]) + '</div>' +
+        '<div class="kpi-label">' + c.label + '</div><div class="caption">Month to date ' + delta(c.m[2], c.good, c.pts ? fmtPts : null) +
+        ' vs ' + (c.m[1] != null ? c.fmt(c.m[1]) : 'no data') + ' last month</div></div>' +
+        modeSeg(c.key, info, c.runLabel) + '</div>' + legendHtml(info, sr[1].some(function (v) { return v != null; })) +
+        '<div class="ac" style="margin-top:6px"></div><p class="note" style="margin:8px 0 0">' + c.note + '</p>';
+      wireModes(el);
+      areaChart(el.querySelector('.ac'), { now: sr[0], prev: sr[1], labels: s ? s.labels : [], notes: s ? s.notes : null,
+        nowLbl: info.nowLbl, prevLbl: info.prevLbl, kind: c.kind, fmt: c.fmt, height: 240, title: c.label + ' ' + info.by,
+        emptyText: 'No data for this account yet.',
+        change: c.pts ? function (a, b) { return a != null && b != null ? fmtPts(a - b) : 'n/a'; } : changeFrom,
+        pointLabel: function (i, w) { return info.point(s.labels[i], w); }, ticks: function (W) { return info.ticks(s.labels, W); } });
+    });
+  }
+  function renderRefundTable() {
+    var d = refundsData;
+    var was = function (m, f, none) { return '<span class="was">' + (m[1] != null ? 'was ' + f(m[1]) : none || 'no data last month') + '</span>'; };
+    // A refund rate is blank when there were no sales to divide by; say so rather than "n/a".
+    var rateCell = function (r) {
+      return (r.rate[0] == null && r.gross[0] === 0 ? 'no sales' : fmtRate(r.rate[0])) +
+        was(r.rate, fmtRate, r.gross[1] === 0 ? 'no sales last month' : null);
+    };
+    var cols = [{ label: 'Account', get: function (r) { return r.account; }, cell: function (r) {
+      return r.account === 'All accounts' ? esc(r.account) : '<button class="linkish" data-account="' + esc(r.account) + '">' + esc(r.account) + '</button>'; } }];
+    [['gross', 'Gross', fmtMoney, true], ['refunds', 'Refunds', fmtMoney, false], ['rate', 'Refund rate', fmtRate, false], ['net', 'Net', fmtMoney, true]]
+      .forEach(function (m) {
+        var k = m[0], f = m[2], pts = k === 'rate';
+        cols.push({ label: m[1] + ' MTD', get: function (r) { return r[k][0]; },
+          cell: pts ? rateCell : function (r) { return f(r[k][0]) + was(r[k], f); } });
+        cols.push({ label: pts ? 'Rate change' : m[1] + ' MoM', get: function (r) { return r[k][2]; },
+          cell: function (r) { return delta(r[k][2], m[3], pts ? fmtPts : null); } });
+      });
+    var c = cols[refundSort.col];
+    var rows = d.accounts.slice().sort(function (a, b) {
+      var x = c.get(a), y = c.get(b);
+      if (x == null) return 1; if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * refundSort.dir;
+    });
+    var tr = function (r) { return '<tr>' + cols.map(function (col) { return '<td>' + col.cell(r) + '</td>'; }).join('') + '</tr>'; };
+    var t = document.getElementById('refund-table');
+    t.innerHTML = '<thead><tr>' + cols.map(function (col, i) {
+      return '<th data-i="' + i + '"' + (i === refundSort.col ? ' aria-sort="' + (refundSort.dir > 0 ? 'ascending' : 'descending') + '"' : '') + '>' + col.label + '</th>';
+    }).join('') + '</tr></thead><tbody>' + rows.map(tr).join('') + '</tbody>' + (d.total ? '<tfoot>' + tr(d.total) + '</tfoot>' : '');
+    t.querySelectorAll('th').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var i = +th.dataset.i;
+        refundSort = { col: i, dir: i === refundSort.col ? -refundSort.dir : (i === 0 ? 1 : -1) };
+        renderRefundTable();
+      });
+    });
+    t.querySelectorAll('[data-account]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        refundAccount = b.dataset.account;
+        document.getElementById('refund-account').value = refundAccount;
+        drawRefundCharts();
+        window.scrollTo(0, 0);
+      });
+    });
+  }
+
   // ---------- load ----------
-  // Read the page from the link first (no server call), so a ?project= or ?view=email link
-  // fetches its own data straight away instead of waiting for the All projects data.
+  // Read the page from the link first (no server call), so a ?project=, ?view=email or
+  // ?view=refunds link fetches its own data straight away instead of waiting for the All projects data.
   function start(prm) {
     if (prm.project) currentProject = prm.project;
-    setView(prm.project ? 'project' : prm.view === 'email' ? 'email' : 'all', true).then(prefetch, prefetch);
+    setView(prm.project ? 'project' : prm.view === 'email' || prm.view === 'refunds' ? prm.view : 'all', true).then(prefetch, prefetch);
   }
   if (hasUrlApi) google.script.url.getLocation(function (loc) { start(loc.parameter || {}); });
   else start({});

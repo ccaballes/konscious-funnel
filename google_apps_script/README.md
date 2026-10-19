@@ -18,6 +18,8 @@ section 5 fills that sheet; this code only displays it.
 | `Email MTD` | notebook (values) | Email & SMS sales month to date vs the same days last month, per funnel and source, plus totals per source. Written once per email type (column H: All / Abandoned Cart / Regular Sales) for the page's filter. |
 | `Email Trends` | notebook (values) | Same layout as `Q3 Trends`: one group per email/SMS source (simon incl. simons, attentive, emotive) and "All email & SMS", each also split by email type ("simon \| Abandoned Cart", "All email & SMS \| Regular Sales"). Sales and Orders for the daily, monthly, quarterly and yearly views. Feeds the Email & SMS charts. |
 | `Email Top 10` | notebook (values) | Month-to-date top 10 per email/SMS source and email type (column H). Each source is ranked by the field `EMAIL_TOP_FIELDS` names for it: UTM Content for simon and attentive, UTM Campaign for emotive (its UTM Content is always blank; the campaign is the text message name). |
+| `Refunds MTD` | notebook section 6 (values) | Per Refunds + Gross account and "All accounts": Gross, Refunds, Refund rate and Net, month to date vs the same days last month, with the % change (percentage points for Refund rate) and how many days each window has uploaded. Built from every row on the Refunds + Gross sheet, so last month fills in once its export has been uploaded once. Refunds are a positive amount; Refund rate = Refunds / Gross; Net = Gross - Refunds. |
+| `Refunds Trends` | notebook section 6 (values) | The same four per account, each day this month vs the same day last month, per day and running (month to date). A day is blank when it isn't uploaded; a note marks the latest day (may be incomplete) and a day only some accounts were uploaded for. Feeds the Refunds & Gross charts. |
 
 UTM Source is matched ignoring case, and `UTM_SOURCE_ALIASES` in the control
 cell merges spellings (e.g. `simons` -> `simon`).
@@ -65,6 +67,12 @@ After that, every notebook run refreshes the numbers; just reload the page.
   scale would flatten the others), all following the Daily / Monthly / Quarterly / Yearly
   switch; then the top 10 tables and the funnel table. An **Email type** filter (All / Abandoned Cart / Regular Sales) at the top of the
   page switches every chart, card and table on it.
+- **Refunds & Gross**: `?view=refunds`. From the Refunds + Gross exports (notebook section 6). An **Account** picker
+  (All accounts or one account), then four large charts: Gross sales, Refunds, Refund rate and Net sales, each with its
+  month-to-date number, the change vs the same days last month (percentage points for Refund rate) and an Each day /
+  Running total switch (Month to date for Refund rate). Then a table of every account, month to date; click an account to
+  show it in the charts. Daily only, so the Daily / Monthly / Quarterly / Yearly switch is hidden on this page. A note above
+  the charts says when last month isn't uploaded yet or the two windows cover a different number of days.
 
 ## Loading speed
 

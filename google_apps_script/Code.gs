@@ -231,3 +231,55 @@ function trendsFrom_(tab, keys) {
   });
   return { views: views, projects: projects };
 }
+
+const REFUNDS_MTD_TAB = 'Refunds MTD';
+const REFUNDS_MTD_HEADER_ROW = 4;
+const REFUNDS_TRENDS_TAB = 'Refunds Trends';
+const REFUNDS_TRENDS_HEADER_ROW = 3;
+// Refunds Trends columns (0-based); each holds this month, the next column last month.
+const REFUND_TREND_COLS = { gross: 3, grossCum: 5, refunds: 7, refundsCum: 9, rate: 11, rateCum: 13, net: 15, netCum: 17 };
+
+// Refunds & Gross page, from the notebook's section 6: month to date per account
+// (Gross, Refunds, Refund rate, Net; each [now, last month, change]) and the daily
+// series per account, in the same shape as getTrends().
+function getRefunds() { return cached_('refunds', refunds_); }
+
+function refunds_() {
+  const ss = SpreadsheetApp.getActive();
+  const ws = ss.getSheetByName(REFUNDS_MTD_TAB), wt = ss.getSheetByName(REFUNDS_TRENDS_TAB);
+  if (!ws || !wt) throw new Error('Tab "' + (ws ? REFUNDS_TRENDS_TAB : REFUNDS_MTD_TAB) +
+    '" not found. Run the notebook\'s Refunds + Gross cell (section 6) first.');
+  const windows = ws.getRange('B1:C2').getDisplayValues();
+  const last = ws.getLastRow();
+  const rows = (last > REFUNDS_MTD_HEADER_ROW
+    ? ws.getRange(REFUNDS_MTD_HEADER_ROW + 1, 1, last - REFUNDS_MTD_HEADER_ROW, 15).getValues() : [])
+    .filter(function (r) { return r[0] !== ''; })
+    .map(function (r) {
+      return { account: String(r[0]), gross: [num_(r[1]), num_(r[2]), num_(r[3])],
+               refunds: [num_(r[4]), num_(r[5]), num_(r[6])], rate: [num_(r[7]), num_(r[8]), num_(r[9])],
+               net: [num_(r[10]), num_(r[11]), num_(r[12])], days: [num_(r[13]), num_(r[14])] };
+    });
+  const top = wt.getRange(1, 1, 1, 3).getDisplayValues()[0];
+  const tl = wt.getLastRow();
+  const groups = {};
+  (tl > REFUNDS_TRENDS_HEADER_ROW
+    ? wt.getRange(REFUNDS_TRENDS_HEADER_ROW + 1, 1, tl - REFUNDS_TRENDS_HEADER_ROW, 21).getValues() : [])
+    .forEach(function (r) {
+      const n = String(r[0]);
+      if (!n) return;
+      const s = groups[n] || (groups[n] = { labels: [], notes: [[], []] });
+      s.labels.push(String(r[2]));
+      s.notes[0].push(String(r[19] || '')); s.notes[1].push(String(r[20] || ''));
+      Object.keys(REFUND_TREND_COLS).forEach(function (k) {
+        const c = REFUND_TREND_COLS[k];
+        (s[k] || (s[k] = [[], []]))[0].push(num_(r[c]));
+        s[k][1].push(num_(r[c + 1]));
+      });
+    });
+  return {
+    current: windows[0], prior: windows[1],
+    accounts: rows.filter(function (r) { return r.account !== 'All accounts'; }),
+    total: rows.filter(function (r) { return r.account === 'All accounts'; })[0] || null,
+    trends: { views: { daily: { now: top[1], prev: top[2] } }, groups: groups }
+  };
+}
