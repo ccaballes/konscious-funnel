@@ -8,7 +8,7 @@ section 5 fills that sheet; this code only displays it.
 | Tab | Filled by | What it holds |
 |---|---|---|
 | `Projects` | notebook | Each project's brand and platform for the side menu, read from its `ads_match` token ("Vital BP Google" -> Vital BP / Google). A project can set `"brand"` or `"platform"` itself to override. Cell F1 holds when the notebook last finished writing (see **Loading speed**). |
-| `Data` | notebook | One row per project per day: Sales, orders, Spend, Purchases, Platform Revenue. New uploads overwrite matching dates and keep older ones. Each file only overwrites its own columns: a day the orders export covers but the ad spend export doesn't keeps its Spend, and a day only the ad spend export covers keeps its Sales. |
+| `Data` | notebook | One row per project per day: Sales, orders, Spend, Purchases, Platform Revenue. New uploads overwrite matching dates and keep older ones. Each file only overwrites its own columns: a day the orders export covers but the ad spend export doesn't keeps its Spend, and a day only the ad spend export covers keeps its Sales. Column J, **Refunded orders**, counts that day's orders whose Charge Status is Refunded or Partially Refunded in the uploaded orders export; it is blank on days written before the notebook counted them. The Brand overview and Facebook vs Google pages add these daily rows up for the dates picked in their date filter. |
 | `Q1 MTD` | notebook (formulas) | Sales, Spend, ROAS and Platform ROAS, month to date vs the same days last month, per project and in total. The total ROAS counts only projects with ad spend in the window. |
 | `Q3 Trends` | notebook (values) | Per project and in total: Sales, Orders (Total Order), Spend, ROAS and Platform ROAS for four views: daily (this month vs last month), monthly and quarterly (this year vs last year) and yearly, each with running / to-date columns. A point is blank when no uploaded day falls in it; a note marks a point that is in progress or only partly uploaded. Feeds the charts. Includes a running Spend total (columns W/X) for the Spend chart. |
 | `UTM Data` | notebook | One row per project / day / UTM Source / UTM Content: Sales and Orders. Same overwrite-and-keep rule as `Data`. |
@@ -62,6 +62,23 @@ After that, every notebook run refreshes the numbers; just reload the page.
   platforms (Facebook, Google) and pick one. Each page has its charts, UTM Source
   pie and top 10 UTM Content. Each has its own link: add `?project=SF` (any project
   name) to the web app URL, e.g. `https://script.google.com/.../exec?project=SF`.
+- **Brand overview**: `?brand=Vital BP` (any brand), or **Overview** at the top of a brand in the side menu. The brand's
+  platforms side by side (Facebook vs Google when it runs both) for the picked dates, compared with the same dates one
+  month earlier: a box saying which platform has the best ROAS (with a warning when the leader spent under 10% of the
+  budget, and when a platform is below 1.0x break-even), a card per metric, and a table with every number, last month's
+  value and the difference. Metrics:
+  - **ROAS** = Sales ÷ Spend (projects with ad spend in those dates, as on All projects).
+  - **Sales**, **Spend**, **Orders** (core + upsell).
+  - **AOV** = Sales ÷ core orders: what one customer checkout brings in, upsells included.
+  - **Refunded orders** and **Refund rate** = refunded orders ÷ orders, from the orders export's Charge Status
+    (Refunded or Partially Refunded). This is per platform; the Refunds & Gross page has refund dollars per store.
+    Recent orders have had less time to be refunded, so the latest dates usually show a lower rate than last month.
+- **Facebook vs Google**: `?view=platforms`. The same, with every brand added up per platform, plus a table of each
+  brand's Facebook ROAS, Google ROAS and which one leads.
+- **Date filter** (both pages above): From / To dates, default month to date (the 1st to the latest uploaded day). The
+  comparison is always the same dates one month earlier: Oct 1 to 19 vs Sep 1 to 19, Oct 5 to 12 vs Sep 5 to 12. A note
+  says when either window has days missing, or when refund counts are missing for some days (re-run the notebook with an
+  orders export covering them).
 - **Email & SMS**: `?view=email`. Total email & SMS sales chart, then a card per source plus a
   total orders card, each with a mini chart on its own scale (simon is far larger, so a shared
   scale would flatten the others), all following the Daily / Monthly / Quarterly / Yearly

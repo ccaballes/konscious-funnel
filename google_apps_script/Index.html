@@ -155,6 +155,12 @@
   .pair .pv { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
   .pv .was { display: block; color: var(--text-muted); font-size: 11px; }
 
+  /* Brand overview / Facebook vs Google: one card per metric, platforms as paired bars */
+  .cmp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; margin-bottom: 16px; }
+  table.cmp td { vertical-align: top; }
+  table.cmp td .delta { margin-left: 6px; font-size: 12px; }
+  input[type="date"].select { min-height: 30px; }
+
   /* written report: bottom line, takeaways, checks */
   .callout { border-left: 3px solid var(--accent); }
   .report p, .report li { color: var(--text-secondary); }
@@ -230,6 +236,7 @@
       <button class="nav-item" data-go="refunds">Refunds &amp; Gross</button>
       <button class="nav-item" data-go="revenue">MTD Revenue Report</button>
       <button class="nav-item" data-go="all">All projects</button>
+      <button class="nav-item" data-go="platforms">Facebook vs Google</button>
       <button class="nav-item" data-go="email">Email &amp; SMS</button>
       <p class="nav-label">Brands</p>
       <div id="nav-projects"></div>
@@ -331,6 +338,32 @@
       </section>
     </div>
 
+    <!-- Brand overview (?brand=) and Facebook vs Google (?view=platforms): the picked dates vs the
+         same dates one month earlier, added up from the Data tab's daily rows. -->
+    <div id="view-compare" hidden>
+      <div class="filter-bar">
+        <label class="caption" for="date-from">From</label>
+        <input type="date" class="select" id="date-from">
+        <label class="caption" for="date-to">to</label>
+        <input type="date" class="select" id="date-to">
+        <button type="button" class="retry" id="date-mtd">Month to date</button>
+        <span class="caption" id="date-note"></span>
+      </div>
+      <section class="card report callout" id="cmp-best" style="margin-bottom:16px"></section>
+      <div id="cmp-legend"></div>
+      <div class="cmp-grid" id="cmp-cards"></div>
+      <section class="card" style="margin-bottom:16px">
+        <h2 id="cmp-table-title">Side by side</h2>
+        <p class="note" id="cmp-table-note"></p>
+        <div class="scroll"><table class="static cmp" id="cmp-table"></table></div>
+      </section>
+      <section class="card" id="cmp-brands-card">
+        <h2>ROAS by brand</h2>
+        <p class="note">ROAS change is in x (now minus last period). Click a brand to open its overview, or a column to sort.</p>
+        <div class="scroll"><table class="cmp" id="cmp-brands"></table></div>
+      </section>
+    </div>
+
     <!-- MTD Revenue Report: a one-off report typed in by hand. The numbers live in REVENUE (script below);
          the text here is written for them, so update both together. -->
     <div id="view-revenue" hidden>
@@ -416,8 +449,9 @@
   function hideTip() { tip.style.display = 'none'; }
 
   // ---------- state ----------
-  var q1Data = null, q2Data = null, emailData = null, trends = null, emailTrends = null, refundsData = null;
-  var view = 'all', currentProject = null, period = 'daily';
+  var q1Data = null, q2Data = null, emailData = null, trends = null, emailTrends = null, refundsData = null, dailyData = null;
+  var view = 'all', currentProject = null, currentBrand = null, period = 'daily';
+  var pickedDates = null;  // Brand overview / Facebook vs Google date filter: { lo, hi }; null = month to date
   var mode = { sales: 'each', orders: 'each', spend: 'each', roas: 'each', email: 'each',
     rGross: 'each', rRefunds: 'each', rRate: 'each', rNet: 'each' };
   var emailType = 'All';   // Email & SMS filter: All / Abandoned Cart / Regular Sales
@@ -429,17 +463,19 @@
   // One server call per dataset, made once and shared: a page asks only for what it shows, the
   // calls run in parallel, and asking again while one is in flight reuses it. A failed call is
   // dropped so "Try again" refetches.
-  var SERVER = { q1: 'getQ1', trends: 'getTrends', q2: 'getQ2', email: 'getEmail', emailTrends: 'getEmailTrends', refunds: 'getRefunds' };
+  var SERVER = { q1: 'getQ1', trends: 'getTrends', q2: 'getQ2', email: 'getEmail', emailTrends: 'getEmailTrends', refunds: 'getRefunds',
+    daily: 'getDaily' };
   // The revenue report's numbers are in this page; it waits on q1 only for the side menu.
   var NEEDS = { all: ['q1', 'trends'], project: ['q1', 'trends', 'q2'], email: ['q1', 'email', 'emailTrends'], refunds: ['q1', 'refunds'],
-    revenue: ['q1'] };
+    revenue: ['q1'], brand: ['q1', 'daily'], platforms: ['q1', 'daily'] };
   var ON_LOAD = {
     q1: function (d) { q1Data = d; buildNav(); renderBars(d.projects); renderTable(d); },
     trends: function (d) { trends = d; },
     q2: function (d) { q2Data = d; buildColors(d.projects); },
     email: function (d) { emailData = d; },
     emailTrends: function (d) { emailTrends = d; },
-    refunds: function (d) { refundsData = d; }
+    refunds: function (d) { refundsData = d; },
+    daily: function (d) { dailyData = d; }
   };
   var loaded = {}, inflight = {};
   function load(name) {
@@ -470,7 +506,8 @@
   function pushUrl() {
     if (!hasUrlApi) return;
     google.script.history.push(null, view === 'project' && currentProject ? { project: currentProject }
-      : view === 'email' || view === 'refunds' || view === 'revenue' ? { view: view } : {});
+      : view === 'brand' && currentBrand ? { brand: currentBrand }
+      : LINK_VIEWS.indexOf(view) >= 0 ? { view: view } : {});
   }
 
   // ---------- navigation ----------
@@ -494,7 +531,8 @@
       var items = groups[brand].sort(function (a, b) { return rank(a.platform) - rank(b.platform) || a.platform.localeCompare(b.platform); });
       return '<button class="nav-item nav-group" data-brand="' + esc(brand) + '" aria-expanded="false" aria-controls="grp-' + gi + '">' +
         '<span>' + esc(brand) + '</span><span class="chev" aria-hidden="true"></span></button>' +
-        '<div class="nav-sub" id="grp-' + gi + '" hidden>' + items.map(function (it) {
+        '<div class="nav-sub" id="grp-' + gi + '" hidden>' +
+        '<button class="nav-item" data-go="brand" data-brand="' + esc(brand) + '">Overview</button>' + items.map(function (it) {
           return '<button class="nav-item" data-go="project" data-project="' + esc(it.project) + '">' + esc(it.platform) + '</button>';
         }).join('') + '</div>';
     }).join('');
@@ -506,7 +544,9 @@
     });
     document.querySelectorAll('#nav .nav-item[data-go]').forEach(function (b) {
       b.addEventListener('click', function () {
-        if (b.dataset.go === 'project') openProject(b.dataset.project); else setView(b.dataset.go);
+        if (b.dataset.go === 'project') openProject(b.dataset.project);
+        else if (b.dataset.go === 'brand') openBrand(b.dataset.brand);
+        else setView(b.dataset.go);
         document.getElementById('side').classList.remove('open');
         document.getElementById('menu-btn').setAttribute('aria-expanded', 'false');
       });
@@ -515,11 +555,13 @@
   }
   function markNav() {
     document.querySelectorAll('#nav .nav-item[data-go]').forEach(function (b) {
-      var on = b.dataset.go === view && (view !== 'project' || b.dataset.project === currentProject);
+      var on = b.dataset.go === view && (view !== 'project' || b.dataset.project === currentProject) &&
+        (view !== 'brand' || b.dataset.brand === currentBrand);
       if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
-    // The brand of the open project page stays expanded and highlighted.
-    var curBrand = view === 'project' && currentProject && q1Data ? metaOf(currentProject).brand : null;
+    // The brand of the open project or overview page stays expanded and highlighted.
+    var curBrand = view === 'brand' ? currentBrand
+      : view === 'project' && currentProject && q1Data ? metaOf(currentProject).brand : null;
     document.querySelectorAll('#nav .nav-group').forEach(function (g) {
       var brand = g.dataset.brand, open = !!openGroups[brand] || brand === curBrand;
       g.setAttribute('aria-expanded', String(open));
@@ -546,7 +588,8 @@
   function setView(v, noPush) {
     view = v;
     setTitle(); markNav();
-    document.getElementById('period-seg').hidden = v === 'refunds' || v === 'revenue';   // daily only / no charts over time
+    // Refunds & Gross is daily only; the other pages here have no charts over time.
+    document.getElementById('period-seg').hidden = ['refunds', 'revenue', 'brand', 'platforms'].indexOf(v) >= 0;
     if (!noPush) pushUrl();
     var need = NEEDS[v];
     if (need.every(function (n) { return loaded[n]; })) { renderView(); return Promise.resolve(); }
@@ -559,8 +602,10 @@
     });
   }
   function openProject(name) { currentProject = name; setView('project'); }
+  function openBrand(name) { currentBrand = name; setView('brand'); }
   function showPanels(on) {
-    document.getElementById('metrics').hidden = !on || view === 'email' || view === 'refunds' || view === 'revenue';
+    document.getElementById('metrics').hidden = !on || (view !== 'all' && view !== 'project');
+    document.getElementById('view-compare').hidden = !on || (view !== 'brand' && view !== 'platforms');
     document.getElementById('view-all').hidden = !on || view !== 'all';
     document.getElementById('view-project').hidden = !on || view !== 'project';
     document.getElementById('view-email').hidden = !on || view !== 'email';
@@ -573,6 +618,7 @@
     if (view === 'email') { renderEmailPeriod(); renderEmail(); }
     else if (view === 'refunds') renderRefunds();
     else if (view === 'revenue') renderRevenue();
+    else if (view === 'brand' || view === 'platforms') renderCompare();
     else { setPeriodText(); drawMetrics(); if (view === 'project') drawProject(); }
   }
   function setTitle() {
@@ -580,8 +626,11 @@
     if (view === 'project' && currentProject && q1Data) {
       var m = metaOf(currentProject);
       title.innerHTML = esc(m.brand) + '<span class="chip" title="' + esc(currentProject) + '">' + esc(m.platform) + '</span>';
+    } else if (view === 'brand') {
+      title.innerHTML = esc(currentBrand || '') + '<span class="chip">Overview</span>';
     } else title.textContent = view === 'all' ? 'All projects' : view === 'email' ? 'Email & SMS'
-      : view === 'refunds' ? 'Refunds & Gross' : view === 'revenue' ? 'MTD Revenue Report' : (currentProject || '');
+      : view === 'refunds' ? 'Refunds & Gross' : view === 'revenue' ? 'MTD Revenue Report'
+      : view === 'platforms' ? 'Facebook vs Google' : (currentProject || '');
   }
   function setPeriodText() {
     if (!q1Data) return;
@@ -1179,6 +1228,280 @@
     });
   }
 
+  // ---------- Brand overview and Facebook vs Google ----------
+  // Both pages add up the Data tab's daily rows (getDaily) for the picked dates and for the same
+  // dates one month earlier (Oct 1 to 19 vs Sep 1 to 19). ROAS = Sales ÷ Spend over the projects
+  // with ad spend in those dates, as on All projects; AOV = Sales ÷ core orders;
+  // Refund rate = refunded orders ÷ orders.
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function isoDay(y, m, d) { return y + '-' + ('0' + m).slice(-2) + '-' + ('0' + d).slice(-2); }
+  // The same day one month earlier, clamped to that month's length (Mar 31 -> Feb 28), like EDATE.
+  function monthBack(s) {
+    var y = +s.slice(0, 4), m = +s.slice(5, 7) - 1, d = +s.slice(8, 10);
+    if (m === 0) { y -= 1; m = 12; }
+    return isoDay(y, m, Math.min(d, new Date(Date.UTC(y, m, 0)).getUTCDate()));
+  }
+  function dayCount(lo, hi) { return Math.round((Date.parse(hi) - Date.parse(lo)) / 864e5) + 1; }
+  // 'Oct 1 to 19', 'Sep 20 to Oct 19', 'Oct 19'; years are added when the two ends differ in year.
+  function fmtSpan(lo, hi) {
+    var yr = lo.slice(0, 4) !== hi.slice(0, 4), lm = +lo.slice(5, 7), hm = +hi.slice(5, 7);
+    var left = MONTHS[lm - 1] + ' ' + +lo.slice(8, 10) + (yr ? ', ' + lo.slice(0, 4) : '');
+    if (lo === hi) return left;
+    return left + ' to ' + (lm === hm && !yr ? '' : MONTHS[hm - 1] + ' ') + +hi.slice(8, 10) + (yr ? ', ' + hi.slice(0, 4) : '');
+  }
+  function dateWindows() {
+    var r = pickedDates || { lo: dailyData.latest.slice(0, 8) + '01', hi: dailyData.latest };
+    return { lo: r.lo, hi: r.hi, plo: monthBack(r.lo), phi: monthBack(r.hi) };
+  }
+
+  // Totals for some projects over lo..hi. Refunds stay null when a day with orders has no refund
+  // count (written before the notebook counted refunded orders) rather than undercounting.
+  function totals(members, lo, hi) {
+    var t = { sales: 0, spend: 0, orders: 0, core: 0, refunds: 0, spendSales: 0, days: {}, gap: false };
+    members.forEach(function (n) {
+      var s = 0, sp = 0;
+      (dailyData.projects[n] || []).forEach(function (r) {
+        if (r[0] < lo || r[0] > hi) return;
+        t.days[r[0]] = true;
+        s += r[1] || 0; sp += r[5] || 0; t.core += r[2] || 0; t.orders += r[4] || 0;
+        if (r[6] == null) { if (r[4]) t.gap = true; } else t.refunds += r[6];
+      });
+      t.sales += s; t.spend += sp;
+      if (sp > 0) t.spendSales += s;
+    });
+    t.roas = t.spend > 0 ? t.spendSales / t.spend : null;
+    t.aov = t.core > 0 ? t.sales / t.core : null;
+    if (t.gap) t.refunds = null;
+    t.rate = t.refunds != null && t.orders > 0 ? t.refunds / t.orders : null;
+    return t;
+  }
+  function withTotals(g, w) { g.now = totals(g.members, w.lo, w.hi); g.prev = totals(g.members, w.plo, w.phi); return g; }
+  // Projects per platform, in the side menu's order: [{ name: 'Facebook', members: ['VBP-FB'] }, ...]
+  function platformGroups(names) {
+    var by = {};
+    names.forEach(function (n) { var p = metaOf(n).platform; (by[p] = by[p] || []).push(n); });
+    var rank = function (pl) { var i = PLATFORM_ORDER.indexOf(pl); return i < 0 ? 99 : i; };
+    return Object.keys(by).sort(function (a, b) { return rank(a) - rank(b) || a.localeCompare(b); })
+      .map(function (pl) { return { name: pl, members: by[pl] }; });
+  }
+
+  function fmtX(v) { return (v > 0 ? '+' : '') + v.toFixed(2) + 'x'; }
+  // diff: the change is now minus last period (x for ROAS, points for a rate); otherwise a % change.
+  var CMP_METRICS = [
+    { key: 'roas', label: 'ROAS', fmt: fmtRoas, good: true, diff: fmtX,
+      note: 'Sales ÷ Spend. Below 1.0x, ad spend is higher than the sales it brought in.' },
+    { key: 'sales', label: 'Sales', fmt: fmtMoney, good: true, note: 'Order sales, refunded orders included.' },
+    { key: 'spend', label: 'Spend', fmt: fmtMoney, good: null, note: 'Ad spend from the TNT export.' },
+    { key: 'orders', label: 'Orders', fmt: fmtCount, good: true, note: 'Core + upsell orders.' },
+    { key: 'aov', label: 'AOV', fmt: fmtMoney, good: true,
+      note: 'Average order value = Sales ÷ core orders: what one customer checkout brings in, upsells included.' },
+    { key: 'rate', label: 'Refund rate', fmt: fmtRate, good: false, diff: fmtPts,
+      note: 'Orders in these dates now marked Refunded or Partially Refunded, ÷ orders. Recent orders have had less ' +
+        'time to be refunded, so the latest dates usually look better than last month.' }
+  ];
+  var REFUNDS_ROW = { key: 'refunds', label: 'Refunded orders', fmt: fmtCount, good: false };
+  // A difference is rounded to what it shows (0.01x, 0.1 pts), so +0.004x reads as flat, not up.
+  function cmpChange(m, a, b) {
+    if (a == null || b == null) return null;
+    if (!m.diff) return b > 0 ? a / b - 1 : null;
+    var step = m.key === 'rate' ? 1000 : 100;
+    return Math.round((a - b) * step) / step;
+  }
+  function money2(v) { return '$' + v.toFixed(2); }
+
+  // Who leads on ROAS, by how much, and what to be careful about.
+  function bestHtml(groups, scope, w) {
+    var span = fmtSpan(w.lo, w.hi), pspan = fmtSpan(w.plo, w.phi);
+    var byRoas = function (k) {
+      return groups.filter(function (g) { return g[k].roas != null; }).sort(function (a, b) { return b[k].roas - a[k].roas; });
+    };
+    var live = byRoas('now'), prev = byRoas('prev');
+    var was = function (g) { return g.prev.roas != null ? ' (was ' + fmtRoas(g.prev.roas) + ' in ' + pspan + ')' : ''; };
+    var below = function (list) {
+      var b = list.filter(function (g) { return g.now.roas < 1; }).map(function (g) { return g.name; });
+      if (!b.length) return '';
+      return ' ' + (b.length === list.length && list.length > 1 ? (list.length === 2 ? 'Both are' : 'All are')
+        : b.join(' and ') + (b.length > 1 ? ' are' : ' is')) + ' below 1.0x break-even: ad spend is higher than the sales it brought in.';
+    };
+    if (!live.length) return '<h2>ROAS, ' + esc(span) + '</h2><p>No ad spend in these dates, so there is no ROAS to compare.</p>';
+    var top = live[0];
+    if (live.length === 1) {
+      var why = groups.length === 1 ? 'Only ' + top.name + ' runs for ' + scope + ', so there is nothing to compare it with.'
+        : 'Only ' + top.name + ' had ad spend in these dates.';
+      return '<h2>ROAS, ' + esc(span) + '</h2><p>' + esc(why) + ' Its ROAS is <b>' + fmtRoas(top.now.roas) + '</b>' +
+        esc(was(top)) + '.' + below([top]) + '</p>';
+    }
+    var second = live[1], gap = top.now.roas - second.now.roas, even = gap < 0.05;
+    var lead = even
+      ? '<b>' + esc(top.name) + ' and ' + esc(second.name) + ' are about even on ROAS</b>: ' + fmtRoas(top.now.roas) + ' vs ' + fmtRoas(second.now.roas) + '.'
+      : '<b>' + esc(top.name) + ' has the best ROAS</b>: ' + fmtRoas(top.now.roas) + ' vs ' + fmtRoas(second.now.roas) + ' on ' + esc(second.name) +
+        '. Each $1 of ad spend brought in ' + money2(top.now.roas) + ' in sales on ' + esc(top.name) + ' and ' +
+        money2(second.now.roas) + ' on ' + esc(second.name) + '.';
+    var notes = [];
+    var spendAll = live.reduce(function (s, g) { return s + g.now.spend; }, 0);
+    if (!even && top.now.spend / spendAll < 0.1) notes.push('Careful: ' + top.name + ' spent only ' + fmtMoney(top.now.spend) + ' (' +
+      fmtRate(top.now.spend / spendAll) + ' of the ad spend here), so its ROAS rests on a small budget.');
+    if (prev.length > 1) {
+      var list = prev.map(function (g) { return g.name + ' ' + fmtRoas(g.prev.roas); }).join(', ');
+      notes.push(prev[0].name !== top.name && !even ? 'Last month the order was the other way round: ' + list + ' (' + pspan + ').'
+        : 'Same days last month: ' + list + '.');
+    }
+    return '<h2>Best ROAS, ' + esc(span) + '</h2><p>' + lead + below(live) + '</p>' +
+      notes.map(function (n) { return '<p>' + esc(n) + '</p>'; }).join('');
+  }
+
+  // One card per metric: a row per platform, this period's bar over last month's.
+  function cmpCard(m, groups) {
+    var max = Math.max.apply(null, groups.map(function (g) { return Math.max(g.now[m.key] || 0, g.prev[m.key] || 0); }).concat([1e-9]));
+    return '<article class="card"><h2>' + m.label + '</h2><p class="note">' + esc(m.note) + '</p><div class="pair">' +
+      groups.map(function (g) {
+        var a = g.now[m.key], b = g.prev[m.key];
+        var bar = function (cls, v) {   // no sliver for a value that's missing (n/a)
+          return '<span class="b ' + cls + '" style="width:' + ((v || 0) / max * 100) + '%' + (v == null ? ';min-width:0' : '') + '"></span>';
+        };
+        return '<div class="name" title="' + esc(g.name) + '">' + esc(g.name) + '</div>' +
+          '<div class="pbars">' + bar('now', a) + bar('prev', b) + '</div>' +
+          '<div class="pv">' + m.fmt(a) + '<span class="was">was ' + m.fmt(b) + '</span></div>' +
+          '<div class="pv">' + delta(cmpChange(m, a, b), m.good, m.diff) + '</div>';
+      }).join('') + '</div></article>';
+  }
+  // Value, change, and last month's value with the difference ("minus" last month).
+  function cmpCell(m, g) {
+    var a = g.now[m.key], b = g.prev[m.key];
+    var diff = !m.diff && a != null && b != null ? ' (' + signed(m.fmt, a - b) + ')' : '';
+    return '<td>' + m.fmt(a) + delta(cmpChange(m, a, b), m.good, m.diff) + '<span class="was">was ' + m.fmt(b) + diff + '</span></td>';
+  }
+  function cmpTable(cols) {
+    var rows = CMP_METRICS.slice(0, 5).concat([REFUNDS_ROW, CMP_METRICS[5]]);
+    var t = document.getElementById('cmp-table');
+    t.innerHTML = '<thead><tr><th>Metric</th>' + cols.map(function (g) {
+      return '<th>' + (g.project ? '<button class="linkish" data-project="' + esc(g.project) + '">' + esc(g.name) + '</button>' : esc(g.name)) + '</th>';
+    }).join('') + '</tr></thead><tbody>' + rows.map(function (m) {
+      return '<tr><td>' + m.label + '</td>' + cols.map(function (g) { return cmpCell(m, g); }).join('') + '</tr>';
+    }).join('') + '</tbody>';
+    t.querySelectorAll('[data-project]').forEach(function (b) { b.addEventListener('click', function () { openProject(b.dataset.project); }); });
+  }
+  // What the dates on screen don't cover: missing upload days, and days without refund counts.
+  function coverageText(groups, w) {
+    var days = function (k) { var all = {}; groups.forEach(function (g) { Object.keys(g[k].days).forEach(function (d) { all[d] = 1; }); }); return Object.keys(all).length; };
+    var have = days('now'), havep = days('prev'), want = dayCount(w.lo, w.hi), wantp = dayCount(w.plo, w.phi), out = [];
+    if (!havep) out.push('No data uploaded for ' + fmtSpan(w.plo, w.phi) + ', so the changes show n/a.');
+    else if (have < want || havep < wantp) out.push('Uploads cover ' + have + ' of ' + want + ' days now and ' + havep + ' of ' + wantp +
+      ' days last month, so the changes compare uneven windows.');
+    if (groups.some(function (g) { return g.now.refunds === null || g.prev.refunds === null; }))
+      out.push('Refund rate is n/a where days were uploaded before the notebook counted refunded orders: re-run it with an orders export covering these dates.');
+    return out.join(' ');
+  }
+
+  var brandSort = { col: 5, dir: -1 };
+  // Facebook vs Google page: each brand's ROAS per platform and which one leads.
+  function renderBrandTable(names, w) {
+    var brands = {};
+    names.forEach(function (n) { var b = metaOf(n).brand; (brands[b] = brands[b] || []).push(n); });
+    var rows = Object.keys(brands).map(function (b) {
+      var gs = {};
+      platformGroups(brands[b]).forEach(function (g) { gs[g.name] = withTotals(g, w); });
+      var total = withTotals({ members: brands[b] }, w);
+      var fb = gs.Facebook, gg = gs.Google, best = 'n/a', small = false;
+      if (fb && gg && fb.now.roas != null && gg.now.roas != null) {
+        best = Math.abs(fb.now.roas - gg.now.roas) < 0.05 ? 'About even' : fb.now.roas > gg.now.roas ? 'Facebook' : 'Google';
+        var lead = best === 'Facebook' ? fb : best === 'Google' ? gg : null;
+        if (lead && lead.now.spend / (fb.now.spend + gg.now.spend) < 0.1) small = true;   // as in bestHtml's "Careful"
+      } else if (fb && fb.now.roas != null && !(gg && gg.now.spend)) best = gg ? 'Facebook (Google had no spend)' : 'Facebook only';
+      else if (gg && gg.now.roas != null && !(fb && fb.now.spend)) best = fb ? 'Google (Facebook had no spend)' : 'Google only';
+      return { brand: b, fb: fb, gg: gg, best: best, small: small, total: total };
+    });
+    var roasCell = function (g) {
+      if (!g) return '<span class="was">not running</span>';
+      var m = CMP_METRICS[0], a = g.now.roas, b = g.prev.roas;
+      return fmtRoas(a) + delta(cmpChange(m, a, b), true, fmtX) + '<span class="was">was ' + fmtRoas(b) + ' &middot; spend ' + fmtMoney(g.now.spend) + '</span>';
+    };
+    var cols = [
+      { label: 'Brand', get: function (r) { return r.brand; }, cell: function (r) { return '<button class="linkish" data-brand="' + esc(r.brand) + '">' + esc(r.brand) + '</button>'; } },
+      { label: 'Facebook ROAS', get: function (r) { return r.fb ? r.fb.now.roas : null; }, cell: function (r) { return roasCell(r.fb); } },
+      { label: 'Google ROAS', get: function (r) { return r.gg ? r.gg.now.roas : null; }, cell: function (r) { return roasCell(r.gg); } },
+      { label: 'Best ROAS', get: function (r) { return r.best; }, cell: function (r) {
+        return esc(r.best) + (r.small ? '<span class="was">on under 10% of the spend: small budget</span>' : ''); } },
+      { label: 'Brand ROAS', get: function (r) { return r.total.now.roas; }, cell: function (r) { return fmtRoas(r.total.now.roas) + '<span class="was">was ' + fmtRoas(r.total.prev.roas) + '</span>'; } },
+      { label: 'Sales', get: function (r) { return r.total.now.sales; }, cell: function (r) { return fmtMoney(r.total.now.sales) + '<span class="was">was ' + fmtMoney(r.total.prev.sales) + '</span>'; } }
+    ];
+    var c = cols[brandSort.col];
+    rows.sort(function (a, b) {
+      var x = c.get(a), y = c.get(b);
+      if (x == null) return 1; if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * brandSort.dir;
+    });
+    var t = document.getElementById('cmp-brands');
+    t.innerHTML = '<thead><tr>' + cols.map(function (col, i) {
+      return '<th data-i="' + i + '"' + (i === brandSort.col ? ' aria-sort="' + (brandSort.dir > 0 ? 'ascending' : 'descending') + '"' : '') + '>' + col.label + '</th>';
+    }).join('') + '</tr></thead><tbody>' + rows.map(function (r) {
+      return '<tr>' + cols.map(function (col) { return '<td>' + col.cell(r) + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</tbody>';
+    t.querySelectorAll('th').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var i = +th.dataset.i;
+        brandSort = { col: i, dir: i === brandSort.col ? -brandSort.dir : (i === 0 || i === 3 ? 1 : -1) };
+        renderBrandTable(names, w);
+      });
+    });
+    t.querySelectorAll('[data-brand]').forEach(function (b) { b.addEventListener('click', function () { openBrand(b.dataset.brand); window.scrollTo(0, 0); }); });
+    return rows;
+  }
+
+  function renderCompare() {
+    var d = dailyData;
+    if (busy || (view !== 'brand' && view !== 'platforms') || !d || !q1Data) return;
+    var brandView = view === 'brand';
+    var names = q1Data.projects.map(function (p) { return p.project; })
+      .filter(function (n) { return !brandView || metaOf(n).brand === currentBrand; });
+    var empty = !d.latest ? 'No daily data yet. Run the notebook\'s dashboard cell first.'
+      : !names.length ? 'No projects found for "' + (currentBrand || '') + '".' : '';
+    document.getElementById('cmp-best').innerHTML = empty ? '<p>' + esc(empty) + '</p>' : '';
+    ['cmp-legend', 'cmp-cards'].forEach(function (id) { document.getElementById(id).innerHTML = ''; });
+    document.getElementById('cmp-table').innerHTML = '';
+    document.getElementById('cmp-brands-card').hidden = brandView || !!empty;
+    if (empty) return;
+
+    var w = dateWindows(), f = document.getElementById('date-from'), t = document.getElementById('date-to');
+    f.min = t.min = d.first; f.max = t.max = d.latest; f.value = w.lo; t.value = w.hi;
+    var span = fmtSpan(w.lo, w.hi), pspan = fmtSpan(w.plo, w.phi);
+    document.getElementById('period').textContent = span + ' vs the same dates last month, ' + pspan + '. Latest data: ' + d.latest + '.';
+
+    var groups = platformGroups(names).map(function (g) { return withTotals(g, w); });
+    if (brandView) groups.forEach(function (g) { if (g.members.length === 1) g.project = g.members[0]; });
+    var scope = brandView ? currentBrand : 'all brands';
+    var best = bestHtml(groups, scope, w);
+    document.getElementById('date-note').textContent = coverageText(groups, w);
+    document.getElementById('cmp-legend').innerHTML = legendHtml({ nowLbl: span, prevLbl: pspan, period: 'daily' }, true);
+    document.getElementById('cmp-cards').innerHTML = CMP_METRICS.map(function (m) { return cmpCard(m, groups); }).join('');
+    var total = groups.length > 1 ? withTotals({ name: brandView ? 'All ' + currentBrand : 'All platforms', members: names }, w) : null;
+    cmpTable(groups.concat(total ? [total] : []));
+    document.getElementById('cmp-table-title').textContent = brandView
+      ? (groups.length > 1 ? currentBrand + ': platforms side by side' : currentBrand + ': ' + groups[0].name) : 'All brands by platform';
+    document.getElementById('cmp-table-note').textContent = 'Each cell: ' + span + ', its change, and ' + pspan +
+      ' with the difference in brackets.' + (brandView && groups.length > 1 ? ' Click a platform to open its page.' : '');
+
+    if (!brandView) {
+      var rows = renderBrandTable(names, w);
+      var both = rows.filter(function (r) { return r.fb && r.gg && r.fb.now.roas != null && r.gg.now.roas != null; });
+      var wins = function (p) { return both.filter(function (r) { return r.best === p; }).length; };
+      if (both.length) best += '<p>' + esc('Brand by brand: of the ' + both.length + ' brand' + (both.length > 1 ? 's' : '') +
+        ' with spend on both, Facebook has the better ROAS in ' + wins('Facebook') + ' and Google in ' + wins('Google') +
+        (wins('About even') ? ' (' + wins('About even') + ' about even)' : '') + '.') + '</p>';
+    }
+    document.getElementById('cmp-best').innerHTML = best;
+  }
+  function setDates() {
+    var lo = document.getElementById('date-from').value, hi = document.getElementById('date-to').value;
+    if (!dailyData || !lo || !hi) return;
+    if (lo > hi) { var x = lo; lo = hi; hi = x; }
+    pickedDates = { lo: lo < dailyData.first ? dailyData.first : lo, hi: hi > dailyData.latest ? dailyData.latest : hi };
+    renderCompare();
+  }
+  document.getElementById('date-from').addEventListener('change', setDates);
+  document.getElementById('date-to').addEventListener('change', setDates);
+  document.getElementById('date-mtd').addEventListener('click', function () { pickedDates = null; renderCompare(); });
+
   // ---------- MTD Revenue Report ----------
   // A one-off report typed in by hand: C100 and GA revenue are not on the dashboard sheet.
   // Changes, shares and Other channels (GA total minus the named channels) are worked out from
@@ -1267,10 +1590,12 @@
   // ---------- load ----------
   // Read the page from the link first (no server call), so a ?project=, ?view=email, ?view=refunds or
   // ?view=revenue link fetches its own data straight away instead of waiting for the All projects data.
-  var LINK_VIEWS = ['email', 'refunds', 'revenue'];
+  var LINK_VIEWS = ['email', 'refunds', 'revenue', 'platforms'];
   function start(prm) {
     if (prm.project) currentProject = prm.project;
-    setView(prm.project ? 'project' : LINK_VIEWS.indexOf(prm.view) >= 0 ? prm.view : 'all', true).then(prefetch, prefetch);
+    if (prm.brand) currentBrand = prm.brand;
+    setView(prm.project ? 'project' : prm.brand ? 'brand' : LINK_VIEWS.indexOf(prm.view) >= 0 ? prm.view : 'all', true)
+      .then(prefetch, prefetch);
   }
   if (hasUrlApi) google.script.url.getLocation(function (loc) { start(loc.parameter || {}); });
   else start({});
