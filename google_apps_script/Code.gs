@@ -283,3 +283,39 @@ function refunds_() {
     trends: { views: { daily: { now: top[1], prev: top[2] } }, groups: groups }
   };
 }
+
+const DATA_TAB = 'Data';
+// Data tab columns the date-filtered pages read, found by header name.
+const DAILY_COLS = { sales: 'Sales', core: 'Core order', upsell: 'Upsell order', orders: 'Total Order',
+                     spend: 'Spend', refunded: 'Refunded orders' };
+
+// Brand overview and Facebook vs Google pages: every project's daily rows from the Data tab,
+// which the page adds up for the dates picked in its date filter. Each row is
+// [date, sales, core, upsell, orders, spend, refunded]; refunded is null on days written before
+// the notebook counted refunded orders.
+function getDaily() { return cached_('daily', daily_); }
+
+function daily_() {
+  const ss = SpreadsheetApp.getActive(), ws = ss.getSheetByName(DATA_TAB);
+  if (!ws) throw new Error('Tab "' + DATA_TAB + '" not found. Run the notebook\'s dashboard cell first.');
+  const last = ws.getLastRow();
+  if (last < 2) return { first: '', latest: '', projects: {} };
+  const values = ws.getRange(1, 1, last, ws.getLastColumn()).getValues();
+  const head = values[0].map(function (h) { return String(h).trim(); });
+  const at = {};
+  Object.keys(DAILY_COLS).forEach(function (k) { at[k] = head.indexOf(DAILY_COLS[k]); });
+  const get = function (r, k) { return at[k] < 0 ? null : num_(r[at[k]]); };
+  const tz = ss.getSpreadsheetTimeZone();
+  const projects = {};
+  let first = '', latest = '';
+  values.slice(1).forEach(function (r) {
+    const n = String(r[0]);
+    const d = r[1] instanceof Date ? Utilities.formatDate(r[1], tz, 'yyyy-MM-dd') : String(r[1]).trim();
+    if (!n || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+    (projects[n] || (projects[n] = [])).push([d, get(r, 'sales'), get(r, 'core'), get(r, 'upsell'),
+                                              get(r, 'orders'), get(r, 'spend'), get(r, 'refunded')]);
+    if (!first || d < first) first = d;
+    if (d > latest) latest = d;
+  });
+  return { first: first, latest: latest, projects: projects };
+}
