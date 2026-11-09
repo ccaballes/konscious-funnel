@@ -90,12 +90,15 @@ After that, every notebook run refreshes the numbers; just reload the page.
   Running total switch (Month to date for Refund rate). Then a table of every account, month to date; click an account to
   show it in the charts. Daily only, so the Daily / Monthly / Quarterly / Yearly switch is hidden on this page. A note above
   the charts says when last month isn't uploaded yet or the two windows cover a different number of days.
-- **MTD Revenue Report**: `?view=revenue`. October vs September, day 1 to 19: C100, GA Total Revenue and its channels
-  (Google, Facebook, Email, and Other = GA Total minus those three). Bottom line, four headline cards, the dollar change
-  per channel, each channel's share of GA revenue, the key takeaways, a summary table and the checks to run before sharing.
-  A one-off report: C100 and GA revenue aren't on the dashboard sheet, so the numbers are typed into `REVENUE` in
-  `Index.html` (changes, shares and Other are worked out from them). The takeaway text is written for these numbers, so
-  update both together.
+- **MTD Revenue Report**: `?view=revenue`. November vs October, day 1 to 8, typed in from the Konscious PnL workbook:
+  C100 per brand from its `C100` tab; GA Total Revenue and its channels (Google, Facebook, Email, and Other = GA Total
+  minus those three), Skyhouse spend ("Skyhouse Akka FB" and "w2s akka fb pdp", per day), all Akka spend and Akka Rev
+  from its `PnL Summary` tab. Bottom line, four headline cards, the dollar change per GA channel and per C100 brand, each
+  channel's share of GA revenue, Skyhouse Akka FB spend by day, a Skyhouse and Akka spend table, the key takeaways, a
+  summary table and the checks to run before sharing. The numbers are typed into `REVENUE` in `Index.html` (changes,
+  shares, totals and Other are worked out from them). Skyhouse window totals are added up from the daily values because
+  the sheet's own monthly cell for "Skyhouse Akka FB" leaves out the 1st of the month. The takeaway text is written for
+  these numbers, so update both together.
 
 ## Loading speed
 
