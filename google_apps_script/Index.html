@@ -367,10 +367,10 @@
     <!-- MTD Revenue Report: a one-off report typed in by hand from the Konscious PnL workbook. The numbers live in
          REVENUE (script below); the text here is written for them, so update both together. -->
     <div id="view-revenue" hidden>
-      <p class="note" style="margin:0 0 16px">Nov 1 to 8 vs Oct 1 to 8 (8 days each). C100 is from the workbook's C100 tab; GA revenue, Skyhouse spend and Akka numbers are from its PnL Summary tab. Nov 1 to 8 has one more weekend day than Oct 1 to 8 (3 vs 2).</p>
+      <p class="note" style="margin:0 0 16px">Nov 1 to 8 vs Oct 1 to 8 (8 days each). C100 is from the workbook's C100 tab; GA revenue, Skyhouse spend and Akka numbers are from its PnL Summary tab. Nov 1 to 8 has one more weekend day than Oct 1 to 8 (3 vs 2), including two Sundays vs one.</p>
       <section class="card report callout" style="margin-bottom:16px">
         <h2>Bottom line</h2>
-        <p>November is off to a stronger start: GA revenue is <b>up 9.1%</b> and C100 is <b>up 16.8%</b>, so both point the same way. The GA growth follows real budget moving from Google to Facebook, and most of C100's gain is Emma. The watch item is Akka: Skyhouse spend is about <b>6x</b> October's, yet Akka revenue is <b>flat (+0.5%)</b>.</p>
+        <p>November is off to a stronger start: GA revenue is <b>up 7.6%</b> and C100 is <b>up 16.8%</b>, so both point the same way. The GA growth follows real budget moving from Google to Facebook, and most of C100's gain is Emma. The watch item is Akka: Skyhouse spend is about <b>6x</b> October's, yet Akka revenue is <b>flat (+0.5%)</b>.</p>
       </section>
       <div class="tiles" id="rev-tiles"></div>
       <div class="big-grid">
@@ -408,13 +408,13 @@
         <h2>Key takeaways</h2>
         <ol>
           <li><h3>Facebook is carrying the month, and it is a real budget shift.</h3>
-            <p>Facebook GA revenue is up <b>$490K (+56.9%)</b> while Google is down <b>$246K (-25.5%)</b>. Ad spend moved the same way over these days (Facebook roughly +40%, Google roughly -26%), so this looks like budget moving from Google to Facebook, not revenue being credited to the wrong channel. Facebook is now about half of GA revenue (49.3%, up from 34.2%).</p></li>
+            <p>Facebook GA revenue is up <b>$453K (+52.6%)</b> while Google is down <b>$276K (-28.6%)</b>. Ad spend moved the same way over these days (Facebook roughly +40%, Google roughly -26%), so this looks like budget moving from Google to Facebook, not revenue being credited to the wrong channel. Facebook is now about half of GA revenue (48.5%, up from 34.2%).</p></li>
           <li><h3>C100 is up 16.8%, and Emma is most of it.</h3>
             <p>C100 rose <b>$41K</b>, and Emma alone added <b>$33K</b> of that (80%). Vital BP, Seneca and Protaflo also grew. Akka is the biggest decliner, down <b>$6.4K (-15.1%)</b>. November's window has one more weekend day, when C100 sales run lower, so the real gain may be a little bigger than shown.</p></li>
           <li><h3>Skyhouse took over Akka's Facebook buying, but Akka revenue has not moved.</h3>
             <p>Skyhouse Akka FB spend went from <b>$27K to $213K</b>, and W2S has been at $0 since Oct 11. Skyhouse now buys <b>38%</b> of all Akka spend, up from 7%. Most of that money came out of other Akka lines (TNT Akka FB and Akka Google were cut by about $160K), so total Akka spend rose only <b>7.7% ($40K)</b>. Akka revenue stayed flat (+0.5%), so Akka now brings back <b>$1.43 per $1</b> of ad spend, down from $1.53. It is only 8 days in, but Skyhouse has not yet shown it adds Akka revenue.</p></li>
-          <li><h3>Email and Other channels are flat.</h3>
-            <p>Email is down 2.3% and Other channels (GA total minus Google, Facebook and Email) are down 2.3%. The "Other" jump flagged in October is not repeating, apart from one day (Nov 1, see the checks below).</p></li>
+          <li><h3>Other channels now jump every Sunday, and the jumps are growing.</h3>
+            <p>On a normal day, Other channels (GA total minus Google, Facebook and Email) are about 14% of GA revenue, and every Sunday in September looked the same. Since Oct 4, five of the last six Sundays jumped to 26% to 41%: <b>$200K on Nov 1</b> and <b>$112K on Nov 8</b>, up from about $100K in early October. November's window has two Sundays and October's has one, which is why Other is up 3.1%. Something that happens every Sunday, such as an email send or a traffic source without tracking tags, is likely landing in Other. Email itself is down 2.3%.</p></li>
         </ol>
       </section>
       <section class="card" style="margin-bottom:16px">
@@ -426,9 +426,8 @@
         <h2>Checks before sharing widely</h2>
         <ol>
           <li><b>Fix the Skyhouse Akka FB monthly totals in PnL Summary.</b> November's total cell (<code>=sum(DW5:DW33)</code>) leaves out Nov 1, so it shows $133,624 instead of $213,213. October's (<code>=sum(DW36:DW65)</code>) leaves out Oct 1: $83,411 instead of $88,482. This report adds up the daily rows, so it is not affected, but anyone reading the sheet's total sees about $80K less.</li>
-          <li><b>GA Total Rev is exactly the same on Nov 2 and Nov 3 ($386,006).</b> That almost never happens by chance, and Nov 2's channels add up to only $304K. One of the two days was probably pasted twice. If Nov 2 is too high, GA growth is lower than +9.1%.</li>
           <li><b>Confirm Skyhouse's Nov 1 and Nov 2 spend</b> ($79.6K and $60.7K, vs $8.5K to $14.6K on every other November day). Together they are two thirds of November's Skyhouse spend. If they include other days' spend, November's Skyhouse total and the Akka return above are off.</li>
-          <li><b>Nov 1's Other channels revenue is $200K, 41% of that day's GA revenue</b> (a normal day is about 15%). Check which source it came from before reading anything into Other.</li>
+          <li><b>Find what drives the Sunday jumps in Other channels</b> (Oct 4, 11 and 25, Nov 1 and 8). Break Other down by source (Direct, Organic, Referral, Unassigned) for those Sundays. If it turns out to be email or Facebook traffic without tracking tags, those channels are bigger than this report shows.</li>
         </ol>
       </section>
     </div>
@@ -1529,8 +1528,8 @@
     windows: ['Oct 1 to 8', 'Nov 1 to 8'],
     months: ['Oct', 'Nov'],
     // PnL Summary tab: GA Total Rev and three of its channels (Google GA, Facebook GA, Email GA).
-    total: [2512081, 2739757],
-    channels: [['Google', 963403, 717329], ['Facebook', 859930, 1349543], ['Email', 122998, 120138]],
+    total: [2512081, 2703680],
+    channels: [['Google', 963403, 687473], ['Facebook', 859930, 1312586], ['Email', 122998, 120140]],
     // C100 tab, per brand, largest in November first. Helix and SKS had no C100 sales in either window.
     c100: [['Emma', 132660, 165701], ['Protaflo', 35150, 39713], ['Akka', 42221, 35856], ['Vital BP', 9253, 16514],
       ['Seneca', 9140, 14437], ['Synocell', 10776, 11179], ['Sofon', 0, 1440], ['Elimipure', 2750, 1283], ['KA', 3700, 750]],
