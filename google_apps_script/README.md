@@ -91,8 +91,8 @@ After that, every notebook run refreshes the numbers; just reload the page.
   show it in the charts. Daily only, so the Daily / Monthly / Quarterly / Yearly switch is hidden on this page. A note above
   the charts says when last month isn't uploaded yet or the two windows cover a different number of days.
 - **MTD Revenue Report**: `?view=revenue`. November vs October, day 1 to 15, typed in from the Konscious PnL workbook's
-  `PnL Summary` tab: C100 TOTAL, GA4 revenue (GA Total Rev, Google GA, Facebook GA, Email GA) and Skyhouse Akka FB spend
-  (spend, not revenue). Bottom line, four headline cards, the dollar change per GA channel, each channel's share of GA
+  `PnL Summary` and `C100` tabs: C100 per brand, GA4 revenue (GA Total Rev, Google GA, Facebook GA, Email GA) and Skyhouse Akka FB spend
+  (spend, not revenue). Bottom line, four headline cards, the dollar change per GA channel and per C100 brand, each channel's share of GA
   revenue, the key takeaways, a summary table and the checks to run before sharing. The numbers are typed into
   `REVENUE` in `Index.html` (changes, shares and totals are worked out from them). The takeaway text is written for
   these numbers, so update both together.
