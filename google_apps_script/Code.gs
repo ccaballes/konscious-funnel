@@ -319,3 +319,68 @@ function daily_() {
   });
   return { first: first, latest: latest, projects: projects };
 }
+
+// Email: Shopify vs Samcart page. STORES_TAB is an IMPORTRANGE of the "Shopify-Samcart Daily Report": two header
+// rows (row 1 the store, carried across its blank cells; row 2 the source), then a block of totals, then one row
+// per day with a date in column A. Only the day rows are read; the page works out its own totals from them.
+// Not cached: IMPORTRANGE refreshes on its own schedule, not with the notebook run that resets the cache.
+const STORES_TAB = 'Sheet1';
+
+function getStores() {
+  const ss = SpreadsheetApp.getActive(), ws = ss.getSheetByName(STORES_TAB);
+  if (!ws) throw new Error('Tab "' + STORES_TAB + '" not found. Add the Shopify-Samcart Daily Report as a tab named "' + STORES_TAB + '".');
+  const last = ws.getLastRow(), width = ws.getLastColumn();
+  if (last < 3 || width < 2) return { columns: [], days: [] };
+  const values = ws.getRange(1, 1, last, width).getValues();
+  const columns = [];
+  let group = '';
+  for (let c = 1; c < width; c++) {
+    const top = String(values[0][c]).trim(), sub = String(values[1][c]).trim();
+    if (top) group = top;
+    if (top || sub) columns.push({ at: c, group: group, source: sub });
+  }
+  const tz = ss.getSpreadsheetTimeZone();
+  const days = [];
+  values.forEach(function (r) {
+    if (!(r[0] instanceof Date)) return;
+    days.push([Utilities.formatDate(r[0], tz, 'yyyy-MM-dd')].concat(columns.map(function (c) { return num_(r[c.at]); })));
+  });
+  days.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+  return { columns: columns.map(function (c) { return { group: c.group, source: c.source }; }), days: days };
+}
+
+// The UTM detail behind the Shopify vs Samcart heatmap: the Email Data rows (written by the notebook from the
+// orders export, so Samcart orders only) for one month, 'yyyy-MM'. Each row is
+// [date, source, campaign, content, funnel, sales, orders, email type]; the page adds them up for the cell clicked.
+const EMAIL_DATA_TAB = 'Email Data';
+
+function getEmailUtm(month) {
+  month = String(month);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Month must look like 2026-11, not "' + month + '".');
+  return cached_('emailUtm ' + month, function () { return emailUtm_(month); });
+}
+
+function emailUtm_(month) {
+  const ss = SpreadsheetApp.getActive(), ws = ss.getSheetByName(EMAIL_DATA_TAB);
+  if (!ws) throw new Error('Tab "' + EMAIL_DATA_TAB + '" not found. Run the notebook\'s dashboard cell first.');
+  const last = ws.getLastRow();
+  if (last < 2) return [];
+  const values = ws.getRange(1, 1, last, ws.getLastColumn()).getValues();
+  const head = values[0].map(function (h) { return String(h).trim(); });
+  const at = {};
+  ['Date', 'UTM Source', 'UTM Campaign', 'UTM Content', 'Funnel', 'Sales', 'Orders', 'Email type'].forEach(function (k) {
+    at[k] = head.indexOf(k);
+  });
+  if (at['Date'] < 0 || at['UTM Source'] < 0 || at['Sales'] < 0) throw new Error('Tab "' + EMAIL_DATA_TAB + '" is missing its Date, UTM Source or Sales column.');
+  const text = function (r, k) { return at[k] < 0 ? '' : String(r[at[k]]).trim(); };
+  const tz = ss.getSpreadsheetTimeZone();
+  const out = [];
+  values.slice(1).forEach(function (r) {
+    const v = r[at['Date']];
+    const d = v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v).trim().slice(0, 10);
+    if (d.slice(0, 7) !== month) return;
+    out.push([d, text(r, 'UTM Source'), text(r, 'UTM Campaign'), text(r, 'UTM Content'), text(r, 'Funnel'),
+              num_(r[at['Sales']]), at['Orders'] < 0 ? null : num_(r[at['Orders']]), text(r, 'Email type')]);
+  });
+  return out;
+}
