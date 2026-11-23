@@ -74,7 +74,9 @@ After that, every notebook run refreshes the numbers; just reload the page.
     (Refunded or Partially Refunded). This is per platform; the Refunds & Gross page has refund dollars per store.
     Recent orders have had less time to be refunded, so the latest dates usually show a lower rate than last month.
 - **Facebook vs Google**: `?view=platforms`. The same, with every brand added up per platform, plus a table of each
-  brand's Facebook ROAS, Google ROAS and which one leads.
+  brand's Facebook ROAS, Google ROAS and which one leads. A **Brand** picker (All brands or one brand) narrows the page
+  to that brand's platforms, the same numbers as its Brand overview; the per-brand table is hidden then. The pick
+  stays when the dates change.
 - **Date filter** (both pages above): From / To dates, default month to date (the 1st to the latest uploaded day). The
   comparison is always the same dates one month earlier: Oct 1 to 19 vs Sep 1 to 19, Oct 5 to 12 vs Sep 5 to 12. A note
   says when either window has days missing, or when refund counts are missing for some days (re-run the notebook with an
@@ -90,12 +92,15 @@ After that, every notebook run refreshes the numbers; just reload the page.
   Running total switch (Month to date for Refund rate). Then a table of every account, month to date; click an account to
   show it in the charts. Daily only, so the Daily / Monthly / Quarterly / Yearly switch is hidden on this page. A note above
   the charts says when last month isn't uploaded yet or the two windows cover a different number of days.
-- **MTD Revenue Report**: `?view=revenue`. November vs October, day 1 to 15, typed in from the Konscious PnL workbook's
-  `PnL Summary` and `C100` tabs: C100 per brand, GA4 revenue (GA Total Rev, Google GA, Facebook GA, Email GA) and Skyhouse Akka FB spend
-  (spend, not revenue). Bottom line, four headline cards, the dollar change per GA channel and per C100 brand, each channel's share of GA
-  revenue, the key takeaways, a summary table and the checks to run before sharing. The numbers are typed into
-  `REVENUE` in `Index.html` (changes, shares and totals are worked out from them). The takeaway text is written for
-  these numbers, so update both together.
+- **MTD Revenue Report**: `?view=revenue`. November vs October, day 1 to 22, typed in from the Konscious PnL workbook's
+  `PnL Summary` and `C100` tabs: C100 per brand and GA4 revenue (GA Total Rev, Google GA, Facebook GA, Email GA). Spend
+  is filled in through Nov 19, so the spend parts compare day 1 to 19: Facebook and Google ad spend (the sheet's spend
+  columns split into Facebook lines and Google lines) and Akka (Skyhouse Akka FB, all Akka spend, Akka Rev and the
+  revenue per $1 of all Akka spend, next to the sheet's own Akka ROAS, which counts TNT Akka FB and Akka Google only).
+  Bottom line, four headline cards, the dollar change per GA channel and per C100 brand, each channel's share of GA
+  revenue, a week-by-week table, the Akka table, the key takeaways, a summary table and the checks to run before sharing.
+  The numbers are typed into `REVENUE` in `Index.html` (changes, shares and totals are worked out from them). The
+  takeaway text is written for these numbers, so update both together.
 
 ## Loading speed
 

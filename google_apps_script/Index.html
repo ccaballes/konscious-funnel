@@ -342,6 +342,8 @@
          same dates one month earlier, added up from the Data tab's daily rows. -->
     <div id="view-compare" hidden>
       <div class="filter-bar">
+        <label class="caption" for="cmp-brand" id="cmp-brand-label">Brand</label>
+        <select class="select" id="cmp-brand"></select>
         <label class="caption" for="date-from">From</label>
         <input type="date" class="select" id="date-from">
         <label class="caption" for="date-to">to</label>
@@ -367,16 +369,16 @@
     <!-- MTD Revenue Report: a one-off report typed in by hand from the Konscious PnL workbook. The numbers live in
          REVENUE (script below); the text here is written for them, so update both together. -->
     <div id="view-revenue" hidden>
-      <p class="note" style="margin:0 0 16px">Nov 1 to 15 vs Oct 1 to 15 (15 days each), from the PnL Summary and C100 tabs. C100 and GA4 are revenue; Skyhouse is ad spend, not revenue. Nov 1 to 15 has one more weekend day than Oct 1 to 15 (5 vs 4).</p>
+      <p class="note" style="margin:0 0 16px">Revenue: Nov 1 to 22 vs Oct 1 to 22 (22 days each), from the PnL Summary and C100 tabs. Spend is filled in through Nov 19, so ad spend and Akka compare Nov 1 to 19 vs Oct 1 to 19. Nov 1 to 22 has one more weekend day than Oct 1 to 22 (7 vs 6), including one more Sunday (4 vs 3).</p>
       <section class="card report callout" style="margin-bottom:16px">
         <h2>Bottom line</h2>
-        <p>Halfway through November, GA revenue is <b>up 7.1%</b> and C100 is <b>up 22.4%</b> versus the same days in October. The GA growth comes from Facebook (<b>+52.1%</b>), which more than makes up for Google (<b>-25.5%</b>). Skyhouse spend is about <b>11x</b> October's ($307K vs $28K); this report shows spend only, so pair it with Akka revenue before judging it.</p>
+        <p>Three weeks in, GA revenue is <b>up 7.8%</b> and C100 is <b>up 12.2%</b> versus the same days in October. Facebook is still the engine (<b>+38.1%</b>) while Google is down (<b>-21.9%</b>), but Facebook's lead shrank to +13.1% in the third week. Email turned around (<b>+79.4%</b> in the third week). The weak spot is Akka: its ad spend is up 10.5% while its revenue is flat (+1.3%), so each $1 of Akka spend now brings back <b>$1.45</b>, down from $1.59. The sheet's own Akka ROAS (2.62) hides this because it leaves Skyhouse out.</p>
       </section>
       <div class="tiles" id="rev-tiles"></div>
       <div class="big-grid">
         <section class="card">
           <h2>Where the GA change came from</h2>
-          <p class="note">Change in GA4 revenue by channel, Nov 1 to 15 vs Oct 1 to 15. Lavender bars grew, coral bars shrank. Hover a bar for both months.</p>
+          <p class="note">Change in GA4 revenue by channel, Nov 1 to 22 vs Oct 1 to 22. Lavender bars grew, coral bars shrank. Hover a bar for both months.</p>
           <div class="bars" id="rev-bars" style="grid-template-columns:minmax(100px, 150px) 1fr 84px"></div>
           <p class="note" id="rev-net" style="margin:12px 0 0"></p>
         </section>
@@ -388,35 +390,45 @@
       </div>
       <section class="card" style="margin-bottom:16px">
         <h2>C100 by brand</h2>
-        <p class="note">Change in C100 revenue per brand, Nov 1 to 15 vs Oct 1 to 15. Lavender bars grew, coral bars shrank. Hover a bar for both months. Helix had no C100 sales in either window.</p>
+        <p class="note">Change in C100 revenue per brand, Nov 1 to 22 vs Oct 1 to 22. Lavender bars grew, coral bars shrank. Hover a bar for both months. Helix had no C100 sales in either window.</p>
         <div class="bars" id="c100-bars" style="grid-template-columns:minmax(80px, 120px) 1fr 84px"></div>
         <p class="note" id="c100-net" style="margin:12px 0 0"></p>
+      </section>
+      <section class="card" style="margin-bottom:16px">
+        <h2>Week by week</h2>
+        <p class="note">Each cell is the change vs the same days in October, with November's amount first. Spend is filled in through Nov 19, so the last spend column is days 16 to 19.</p>
+        <div class="scroll"><table class="static" id="rev-weeks"></table></div>
+      </section>
+      <section class="card" style="margin-bottom:16px">
+        <h2>Akka: ad spend vs revenue</h2>
+        <p class="note">Nov 1 to 19 vs Oct 1 to 19, the days spend is filled in. All Akka spend adds up every Akka spend column in PnL Summary (TNT, Native, Skyhouse, Michael, Sarah, Akka Taboola and so on). Akka revenue is PnL Summary's Akka Rev, all channels. The last row is the sheet's own ROAS column, which divides Akka Rev by TNT Akka FB and Akka Google only.</p>
+        <div class="scroll"><table class="static" id="akka-table"></table></div>
       </section>
       <section class="card report" style="margin-bottom:16px">
         <h2>Key takeaways</h2>
         <ol>
-          <li><h3>Facebook is carrying the month.</h3>
-            <p>Facebook GA revenue is up <b>$853K (+52.1%)</b> while Google is down <b>$437K (-25.5%)</b>. Facebook is now <b>48.6%</b> of GA revenue (was 34.2%) and Google 25.0% (was 35.9%). In the first 8 days, ad spend moved the same way (Facebook roughly +40%, Google roughly -26%), so this looks like budget moving from Google to Facebook, not a tracking problem.</p></li>
-          <li><h3>C100 is up 22.4%, but it is almost all Emma.</h3>
-            <p>C100 is up <b>$105K</b> and sped up in week two (Nov 1 to 8 up 16.8%, Nov 9 to 15 up <b>28.7%</b>). Emma alone is up <b>$114K (+47.4%)</b>, more than the whole gain: without Emma, C100 is <b>down 3.8%</b>. Seneca (+47.0%), Vital BP (+40.5%) and Synocell (+30.1%) grew from small bases. Akka is the biggest drop, <b>down $26K (-25.8%)</b>. At this pace November would finish around <b>$1.15M</b>, above October ($1.06M) and August ($1.11M, the best month since May), before any Black Friday lift.</p></li>
-          <li><h3>GA growth is steady but slowing a little; Email is the weak spot.</h3>
-            <p>GA total was up 7.6% in the first 8 days and 6.4% in the next 7. Email is down <b>7.9% ($22K)</b>, and it got worse: -2.3% in the first 8 days, <b>-12.5%</b> in the next 7.</p></li>
-          <li><h3>Skyhouse spend is 11x October's, at a steady pace since Nov 3.</h3>
-            <p>Skyhouse Akka FB spend is <b>$307K</b> vs $28K. Nov 1 and Nov 2 alone were $140K; since then it has run at about $13K a day. This is spend, not revenue. Over the same days Akka's C100 sales are <b>down 26%</b>, and in the first 8 days total Akka revenue was flat (+0.5%) while Skyhouse took over more of the Akka budget. Check Akka's total revenue for Nov 1 to 15 before scaling further.</p></li>
+          <li><h3>Facebook is still carrying the month, but its lead is shrinking.</h3>
+            <p>Facebook GA revenue is up <b>$973K (+38.1%)</b> and Google is down <b>$542K (-21.9%)</b>. Facebook is now <b>47.6%</b> of GA revenue (was 37.1%) and Google 26.1% (was 36.0%). Ad spend moved the same way (Facebook <b>+33%</b>, Google <b>-20%</b> over Nov 1 to 19), so this is budget moving from Google to Facebook, not a tracking problem. Week by week, Facebook's gain went from +52.6% and +51.6% to <b>+13.1%</b> in days 16 to 22. October raised its Facebook spend in its third week (about $187K a day, up from $150K), and November is spending about the same ($196K a day), so the easy comparison is over.</p></li>
+          <li><h3>C100 is up 12.2%, but it is still all Emma, and the third week dipped.</h3>
+            <p>C100 is up <b>$90K</b>. Emma alone is up <b>$94K (+23.0%)</b>, more than the whole gain: without Emma, C100 is <b>down 1.3%</b>. Seneca (+64.6%), Synocell (+33.4%) and Vital BP (+9.1%) grew from small bases. Akka is the biggest drop, <b>down $19K (-14.0%)</b>. The growth fell from +22.4% at day 15 to +12.2% now because days 16 to 22 were <b>down 5.6%</b> (Oct 21 and 22 were two of October's best days, $66K and $70K). At this pace November finishes around <b>$1.13M</b> (a week ago the pace was $1.15M), just above August ($1.11M) and October ($1.06M), before Black Friday (Nov 27) and Cyber Monday (Nov 30).</p></li>
+          <li><h3>Email turned around in the third week.</h3>
+            <p>Email was down 2.3% in days 1 to 8 and 12.5% in days 9 to 15, then <b>up 79.4%</b> in days 16 to 22 ($204K vs $114K). It is now <b>up 17.8% ($69K)</b> for the month. The timing fits early holiday sends; confirm with the email team before counting on it. GA total growth picked up with it: +7.6%, +6.4%, then <b>+9.5%</b>.</p></li>
+          <li><h3>Akka: more spend, flat revenue, and the sheet's ROAS hides it.</h3>
+            <p>Over Nov 1 to 19, all Akka ad spend is up <b>$108K (+10.5%)</b> while Akka revenue (all channels) is up only <b>$22K (+1.3%)</b>. Each $1 of Akka spend now brings back <b>$1.45</b>, down from $1.59. Skyhouse is now <b>29.5%</b> of Akka spend (was 2.7%) and Akka PDP FB went from $35K to $124K, while TNT Akka FB and Akka Google were cut. The sheet's Akka ROAS column counts only those last two lines, so it shows <b>2.62, up from 1.81</b>: it looks like Akka got more efficient when it got less efficient. Skyhouse has been scaled back lately (about $7K a day on Nov 16 to 19, vs about $13K a day on Nov 3 to 15). One caveat: this depends on Skyhouse's Nov 1 and 2 spend (see checks).</p></li>
         </ol>
       </section>
       <section class="card" style="margin-bottom:16px">
         <h2>Summary table</h2>
-        <p class="note">Month to date, day 1 to 15 of each month. Skyhouse is ad spend, not revenue.</p>
+        <p class="note">Month to date, day 1 to 22 of each month. Skyhouse and Akka spend are in the Akka table above (day 1 to 19).</p>
         <div class="scroll"><table class="static" id="rev-table"></table></div>
       </section>
       <section class="card report">
         <h2>Checks before sharing widely</h2>
         <ol>
-          <li><b>Confirm the Skyhouse total includes Nov 1.</b> If the $306,867 came from the sheet's monthly cell and it still reads <code>=sum(DW5:DW33)</code>, it leaves out Nov 1 ($79,589) and the real total is $386,456. The cell should read <code>=sum(DW5:DW34)</code>.</li>
-          <li><b>Confirm Skyhouse's Nov 1 and Nov 2 spend</b> ($79.6K and $60.7K). Together they are 46% of November's Skyhouse spend so far.</li>
-          <li><b>Check Akka revenue for Nov 1 to 15</b> against Skyhouse spend. This report has the spend only.</li>
-          <li><b>GA total keeps jumping on Sundays outside Google, Facebook and Email.</b> On Nov 15 it was $135K (35% of the day); a normal day is about 14%. This has happened on most Sundays since Oct 4. Break GA revenue down by source for those Sundays: if it is email or Facebook traffic without tracking tags, those channels are bigger than shown.</li>
+          <li><b>Fix or relabel the Akka ROAS column in PnL Summary.</b> It divides Akka Rev by TNT Akka FB and Akka Google only, so it leaves out Skyhouse, Akka PDP FB, Michael, Sarah and Akka Taboola: <b>$508K</b> of Nov 1 to 19 Akka spend (45%). Anyone reading 2.62 will draw the wrong conclusion.</li>
+          <li><b>Confirm Skyhouse's Nov 1 and Nov 2 spend</b> ($79.6K and $60.7K vs about $13K on a normal day). Together they are 42% of November's Skyhouse spend through Nov 19. If they are really about $13K each, Akka spend is about $115K lower and Akka brings back about <b>$1.62</b> per $1, level with October's $1.59 instead of below it.</li>
+          <li><b>Fill in Nov 20 to 22.</b> The spend columns stop at Nov 19 (Skyhouse has Nov 20), and Akka Rev and Braintree + PayPal are blank for Nov 20 to 22, which is why Payments - CRM turns negative on those days. October's Skyhouse monthly cell also still leaves out Oct 1 ($83,411 vs $88,482 from the daily rows); November's is now right.</li>
+          <li><b>GA total still jumps outside Google, Facebook and Email on most Sundays.</b> That "other" part is about 14% of a normal day, but it was 26% to 41% on 6 of the 8 Sundays since Oct 4, and on a few weekdays (Oct 12, Nov 10, Nov 16). Nov 22 had no jump (14%); check that day's total is final. Over the whole window "other" is up only 2.5%, so it does not change the story, but break it down by source: if it is email or Facebook traffic without tracking tags, those channels are bigger than shown.</li>
         </ol>
       </section>
     </div>
@@ -463,6 +475,7 @@
     rGross: 'each', rRefunds: 'each', rRate: 'each', rNet: 'each' };
   var emailType = 'All';   // Email & SMS filter: All / Abandoned Cart / Regular Sales
   var refundAccount = 'All accounts';   // Refunds & Gross filter
+  var platformBrand = 'All brands';     // Facebook vs Google filter: All brands or one brand
   var hasUrlApi = !!(google.script.url && google.script.history);
   var busy = true;         // a page's data is loading (or failed): charts wait, since they measure their box
 
@@ -1459,14 +1472,24 @@
     var d = dailyData;
     if (busy || (view !== 'brand' && view !== 'platforms') || !d || !q1Data) return;
     var brandView = view === 'brand';
-    var names = q1Data.projects.map(function (p) { return p.project; })
-      .filter(function (n) { return !brandView || metaOf(n).brand === currentBrand; });
+    var all = q1Data.projects.map(function (p) { return p.project; });
+    // Facebook vs Google's Brand picker: All brands, or one brand's platforms (the same numbers as its Brand overview).
+    var brandList = all.map(function (n) { return metaOf(n).brand; })
+      .filter(function (b, i, a) { return a.indexOf(b) === i; }).sort(function (a, b) { return a.localeCompare(b); });
+    if (brandList.indexOf(platformBrand) < 0) platformBrand = 'All brands';
+    var pick = document.getElementById('cmp-brand');
+    pick.hidden = document.getElementById('cmp-brand-label').hidden = brandView;
+    pick.innerHTML = ['All brands'].concat(brandList).map(function (b) {
+      return '<option value="' + esc(b) + '"' + (b === platformBrand ? ' selected' : '') + '>' + esc(b) + '</option>';
+    }).join('');
+    var oneBrand = brandView ? currentBrand : platformBrand === 'All brands' ? null : platformBrand;
+    var names = all.filter(function (n) { return !oneBrand || metaOf(n).brand === oneBrand; });
     var empty = !d.latest ? 'No daily data yet. Run the notebook\'s dashboard cell first.'
       : !names.length ? 'No projects found for "' + (currentBrand || '') + '".' : '';
     document.getElementById('cmp-best').innerHTML = empty ? '<p>' + esc(empty) + '</p>' : '';
     ['cmp-legend', 'cmp-cards'].forEach(function (id) { document.getElementById(id).innerHTML = ''; });
     document.getElementById('cmp-table').innerHTML = '';
-    document.getElementById('cmp-brands-card').hidden = brandView || !!empty;
+    document.getElementById('cmp-brands-card').hidden = !!oneBrand || !!empty;
     if (empty) return;
 
     var w = dateWindows(), f = document.getElementById('date-from'), t = document.getElementById('date-to');
@@ -1475,20 +1498,20 @@
     document.getElementById('period').textContent = span + ' vs the same dates last month, ' + pspan + '. Latest data: ' + d.latest + '.';
 
     var groups = platformGroups(names).map(function (g) { return withTotals(g, w); });
-    if (brandView) groups.forEach(function (g) { if (g.members.length === 1) g.project = g.members[0]; });
-    var scope = brandView ? currentBrand : 'all brands';
+    if (oneBrand) groups.forEach(function (g) { if (g.members.length === 1) g.project = g.members[0]; });
+    var scope = oneBrand || 'all brands';
     var best = bestHtml(groups, scope, w);
     document.getElementById('date-note').textContent = coverageText(groups, w);
     document.getElementById('cmp-legend').innerHTML = legendHtml({ nowLbl: span, prevLbl: pspan, period: 'daily' }, true);
     document.getElementById('cmp-cards').innerHTML = CMP_METRICS.map(function (m) { return cmpCard(m, groups); }).join('');
-    var total = groups.length > 1 ? withTotals({ name: brandView ? 'All ' + currentBrand : 'All platforms', members: names }, w) : null;
+    var total = groups.length > 1 ? withTotals({ name: oneBrand ? 'All ' + oneBrand : 'All platforms', members: names }, w) : null;
     cmpTable(groups.concat(total ? [total] : []));
-    document.getElementById('cmp-table-title').textContent = brandView
-      ? (groups.length > 1 ? currentBrand + ': platforms side by side' : currentBrand + ': ' + groups[0].name) : 'All brands by platform';
+    document.getElementById('cmp-table-title').textContent = oneBrand
+      ? (groups.length > 1 ? oneBrand + ': platforms side by side' : oneBrand + ': ' + groups[0].name) : 'All brands by platform';
     document.getElementById('cmp-table-note').textContent = 'Each cell: ' + span + ', its change, and ' + pspan +
-      ' with the difference in brackets.' + (brandView && groups.length > 1 ? ' Click a platform to open its page.' : '');
+      ' with the difference in brackets.' + (oneBrand && groups.length > 1 ? ' Click a platform to open its page.' : '');
 
-    if (!brandView) {
+    if (!oneBrand) {
       var rows = renderBrandTable(names, w);
       var both = rows.filter(function (r) { return r.fb && r.gg && r.fb.now.roas != null && r.gg.now.roas != null; });
       var wins = function (p) { return both.filter(function (r) { return r.best === p; }).length; };
@@ -1508,25 +1531,47 @@
   document.getElementById('date-from').addEventListener('change', setDates);
   document.getElementById('date-to').addEventListener('change', setDates);
   document.getElementById('date-mtd').addEventListener('click', function () { pickedDates = null; renderCompare(); });
+  document.getElementById('cmp-brand').addEventListener('change', function () { platformBrand = this.value; renderCompare(); });
 
   // ---------- MTD Revenue Report ----------
   // A one-off report typed in by hand from the Konscious PnL workbook: C100, GA4 revenue and Skyhouse spend are not on
   // the dashboard sheet. Changes, shares and totals are worked out from these numbers. The text in #view-revenue is
   // written for them, so update both together.
   var REVENUE = {
-    windows: ['Oct 1 to 15', 'Nov 1 to 15'],
+    windows: ['Oct 1 to 22', 'Nov 1 to 22'],
     months: ['Oct', 'Nov'],
+    through: 'Nov 22',
     // PnL Summary tab, added up from the daily rows: GA Total Rev and Google GA, Facebook GA, Email GA.
-    total: [4781356, 5118835],
-    channels: [['Google', 1717590, 1280324], ['Facebook', 1635952, 2488669], ['Email', 273353, 251728]],
+    total: [6880266, 7417059],
+    channels: [['Google', 2476546, 1934463], ['Facebook', 2555399, 3528708], ['Email', 387324, 456135]],
     // C100 tab, per brand, largest in November first (Helix had none in either window). C100 TOTAL is their sum.
-    c100: [['Emma', 239655, 353276], ['Protaflo', 70678, 74721], ['Akka', 100054, 74218], ['Seneca', 15836, 23277],
-      ['Vital BP', 16243, 22817], ['Synocell', 12716, 16547], ['Sofon', 5169, 4827], ['Elimipure', 3900, 2183], ['KA', 3700, 750],
-      ['SKS', 0, 250]],
-    // PnL Summary tab: Skyhouse Akka FB (column DW). Ad spend, not revenue.
-    skyhouse: [28109, 306867]
+    c100: [['Emma', 408924, 502914], ['Akka', 137943, 118693], ['Protaflo', 110688, 109057], ['Seneca', 21453, 35322],
+      ['Vital BP', 27751, 30270], ['Synocell', 16066, 21433], ['Sofon', 8180, 6327], ['Elimipure', 4047, 2683], ['KA', 3700, 1949],
+      ['SKS', 300, 250]],
+    // Week by week, [October, November] for days 1-8, 9-15 and 16-22. Spend rows (PnL Summary's spend columns split
+    // into Facebook lines and Google lines) stop at day 19, the last day spend is filled in. [name, weeks, good, kind]
+    weekLabels: ['Days 1 to 8', 'Days 9 to 15', 'Days 16 to 22'],
+    weekRows: [['GA Total Revenue', [[2512081, 2703680], [2269275, 2415155], [2098910, 2298224]], true],
+      ['Google', [[963403, 687473], [754187, 592851], [758956, 654139]], true, 'indent'],
+      ['Facebook', [[859930, 1312586], [776022, 1176083], [919447, 1040039]], true, 'indent'],
+      ['Email', [[122998, 120140], [150355, 131588], [113971, 204407]], true, 'indent'],
+      ['C100', [[245650, 286873], [222301, 285993], [271101, 256032]], true],
+      ['Facebook ad spend', [[1180777, 1656609], [1055848, 1542890], [749347, 783542]], null, 'spend'],
+      ['Google ad spend', [[1242888, 915086], [923666, 769412], [484962, 449069]], null, 'spend']],
+    // PnL Summary tab, Oct 1-19 vs Nov 1-19 (spend is filled in through Nov 19). Skyhouse Akka FB is column DW, added up
+    // from the daily rows. spend: every Akka spend column. revenue: Akka Rev (all channels). sheetSpend: TNT Akka FB +
+    // Akka Google, the only spend the sheet's own Akka ROAS column divides by.
+    akka: {
+      windows: ['Oct 1 to 19', 'Nov 1 to 19'],
+      skyhouse: [28250, 335458],
+      spend: [1030801, 1139036],
+      revenue: [1634172, 1655713],
+      sheetSpend: [904577, 631303]
+    }
   };
   function signed(f, v) { return (v > 0 ? '+' : '') + f(v); }
+  function fmtShort(v) { return v >= 1e6 ? '$' + (v / 1e6).toFixed(2) + 'M' : '$' + Math.round(v / 1e3) + 'k'; }
+  function fmtPerDollar(v) { return v == null ? 'n/a' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toFixed(2); }
 
   // Diverging bars: dollar change per row, biggest gain first. Hover a bar for both windows.
   function changeBars(el, list, w) {
@@ -1548,32 +1593,49 @@
       h.addEventListener('mouseleave', hideTip);
     });
   }
-  // Table rows: { name, v: [last, this], fmt, good, cls, row }.
+  // Table rows: { name, v: [last, this], fmt, good, cls, row, pts }. pts: a share, whose change reads in percentage
+  // points and has no % change.
   function revTable(el, w, lines) {
     el.innerHTML = '<thead><tr><th>Metric</th><th>' + w[0] + '</th><th>' + w[1] + '</th><th>Change</th><th>% Change</th></tr></thead><tbody>' +
       lines.map(function (r) {
-        var p = r.v[0] ? delta(r.v[1] / r.v[0] - 1, r.good) : r.v[1] ? 'new' : 'n/a';
+        var d = r.v[1] - r.v[0];
+        var p = r.pts ? '' : r.v[0] ? delta(r.v[1] / r.v[0] - 1, r.good) : r.v[1] ? 'new' : 'n/a';
         return '<tr' + (r.row ? ' class="' + r.row + '"' : '') + '><td' + (r.cls ? ' class="' + r.cls + '"' : '') + '>' + esc(r.name) + '</td>' +
-          '<td>' + r.fmt(r.v[0]) + '</td><td>' + r.fmt(r.v[1]) + '</td><td>' + signed(r.fmt, r.v[1] - r.v[0]) + '</td><td>' + p + '</td></tr>';
+          '<td>' + r.fmt(r.v[0]) + '</td><td>' + r.fmt(r.v[1]) + '</td><td>' + (r.pts ? delta(d, r.good, fmtPts) : signed(r.fmt, d)) + '</td><td>' + p + '</td></tr>';
+      }).join('') + '</tbody>';
+  }
+  // Week-by-week table: one column per week, each cell the % change with both amounts under it.
+  function weekTable(el, labels, rows) {
+    el.innerHTML = '<thead><tr><th>Metric</th>' + labels.map(function (l) { return '<th>' + esc(l) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr><td' + (r[3] === 'indent' ? ' class="indent"' : '') + '>' + esc(r[0]) + '</td>' + r[1].map(function (v, i) {
+          var last = r[3] === 'spend' && i === r[1].length - 1;
+          return '<td>' + delta(v[1] / v[0] - 1, r[2]) + '<span class="was">' + fmtShort(v[1]) + ' vs ' + fmtShort(v[0]) +
+            (last ? ' (days 16 to 19)' : '') + '</span></td>';
+        }).join('') + '</tr>';
       }).join('') + '</tbody>';
   }
 
   function renderRevenue() {
-    var R = REVENUE, w = R.windows;
+    var R = REVENUE, w = R.windows, A = R.akka;
     document.getElementById('period').textContent = 'Month to date: ' + w[1] + ' vs ' + w[0] +
-      '. Typed in from the Konscious PnL workbook (data through Nov 15), not read from the dashboard sheet.';
+      '. Typed in from the Konscious PnL workbook (data through ' + R.through + '), not read from the dashboard sheet.';
     var chg = function (v) { return v[1] - v[0]; }, pct = function (v) { return v[0] ? v[1] / v[0] - 1 : null; };
-    var sumOf = function (list) { return [0, 1].map(function (i) { return list.reduce(function (s, c) { return s + c[i + 1]; }, 0); }); };
+    var both = function (f) { return [f(0), f(1)]; };
+    var sumOf = function (list) { return both(function (i) { return list.reduce(function (s, c) { return s + c[i + 1]; }, 0); }); };
     var core = sumOf(R.channels), c100 = sumOf(R.c100);
     var brands = R.c100.map(function (c) { return { name: c[0], v: [c[1], c[2]], good: true }; });
     var chans = R.channels.map(function (c) { return { name: c[0], v: [c[1], c[2]], good: true }; });
     var share = function (c, i) { return c.v[i] / R.total[i]; };
+    var perDollar = both(function (i) { return A.revenue[i] / A.spend[i]; });
+    var spendDays = ' &middot; days 1 to 19';
 
     document.getElementById('rev-tiles').innerHTML = [
       { label: 'GA Total Revenue', v: R.total, fmt: fmtMoney, good: true },
       { label: 'C100', v: c100, fmt: fmtMoney, good: true },
-      { label: 'Google + Facebook + Email', v: core, fmt: fmtMoney, good: true },
-      { label: 'Skyhouse spend (not revenue)', v: R.skyhouse, fmt: fmtMoney, good: null, note: 'about ' + Math.round(R.skyhouse[1] / R.skyhouse[0]) + 'x' }
+      { label: 'Akka revenue per $1 of Akka ad spend', v: perDollar, fmt: fmtPerDollar, good: true, note: 'days 1 to 19' },
+      { label: 'Skyhouse Akka spend (not revenue)', v: A.skyhouse, fmt: fmtMoney, good: null,
+        note: 'about ' + Math.round(A.skyhouse[1] / A.skyhouse[0]) + 'x' + spendDays }
     ].map(function (t) {
       return '<article class="card kpi"><div class="big">' + t.fmt(t.v[1]) + '</div><div class="kpi-label">' + t.label + '</div>' +
         '<div class="caption">' + delta(pct(t.v), t.good) + ' vs ' + t.fmt(t.v[0]) + ' in ' + R.months[0] + (t.note ? ' &middot; ' + t.note : '') + '</div></article>';
@@ -1612,13 +1674,27 @@
       h.addEventListener('mouseleave', hideTip);
     });
 
-    // Summary table: C100 and its brands, GA total and its three channels (indented), the channels combined, then Skyhouse spend.
+    weekTable(document.getElementById('rev-weeks'), R.weekLabels, R.weekRows);
+
+    // Akka: Skyhouse and the rest of Akka spend, all Akka spend, Akka revenue, the return per $1 on all of it, and the
+    // sheet's own ROAS (which divides by TNT Akka FB + Akka Google only) for contrast.
+    revTable(document.getElementById('akka-table'), A.windows, [
+      { name: 'Skyhouse Akka FB spend', v: A.skyhouse, fmt: fmtMoney, good: null, cls: 'indent' },
+      { name: 'Other Akka spend', v: both(function (i) { return A.spend[i] - A.skyhouse[i]; }), fmt: fmtMoney, good: null, cls: 'indent' },
+      { name: 'All Akka ad spend', v: A.spend, fmt: fmtMoney, good: null },
+      { name: 'Skyhouse share of Akka spend', v: both(function (i) { return A.skyhouse[i] / A.spend[i]; }), fmt: fmtRate, good: null, pts: true },
+      { name: 'Akka revenue (all channels)', v: A.revenue, fmt: fmtMoney, good: true },
+      { name: 'Akka revenue per $1 of all Akka spend', v: perDollar, fmt: fmtPerDollar, good: true },
+      { name: "Sheet's Akka ROAS (TNT Akka FB + Akka Google only)", v: both(function (i) { return A.revenue[i] / A.sheetSpend[i]; }),
+        fmt: fmtRoas, good: null, row: 'subtotal' }
+    ]);
+
+    // Summary table: C100 and its brands, GA total and its three channels (indented), then the channels combined.
     revTable(document.getElementById('rev-table'), w, [{ name: 'C100', v: c100, fmt: fmtMoney, good: true }]
       .concat(brands.map(function (b) { return { name: b.name, v: b.v, fmt: fmtMoney, good: true, cls: 'indent' }; }))
       .concat([{ name: 'GA Total Revenue', v: R.total, fmt: fmtMoney, good: true }])
       .concat(chans.map(function (c) { return { name: c.name, v: c.v, fmt: fmtMoney, good: true, cls: 'indent' }; }))
-      .concat([{ name: 'Google + Facebook + Email combined', v: core, fmt: fmtMoney, good: true, row: 'subtotal' },
-        { name: 'Skyhouse Akka FB spend', v: R.skyhouse, fmt: fmtMoney, good: null }]));
+      .concat([{ name: 'Google + Facebook + Email combined', v: core, fmt: fmtMoney, good: true, row: 'subtotal' }]));
   }
 
   // ---------- load ----------
