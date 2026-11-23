@@ -9,6 +9,7 @@ section 5 fills that sheet; this code only displays it.
 |---|---|---|
 | `Projects` | notebook | Each project's brand and platform for the side menu, read from its `ads_match` token ("Vital BP Google" -> Vital BP / Google). A project can set `"brand"` or `"platform"` itself to override. Cell F1 holds when the notebook last finished writing (see **Loading speed**). |
 | `Data` | notebook | One row per project per day: Sales, orders, Spend, Purchases, Platform Revenue. New uploads overwrite matching dates and keep older ones. Each file only overwrites its own columns: a day the orders export covers but the ad spend export doesn't keeps its Spend, and a day only the ad spend export covers keeps its Sales. Column J, **Refunded orders**, counts that day's orders whose Charge Status is Refunded or Partially Refunded in the uploaded orders export; it is blank on days written before the notebook counted them. The Brand overview and Facebook vs Google pages add these daily rows up for the dates picked in their date filter. |
+| `Sheet1` | you (IMPORTRANGE) | The Shopify-Samcart Daily Report: two header rows (store, then source), a block of totals, then one row per day with the date in column A: email & SMS sales by store (Shopify, Samcart) and source (Attentive, Emotive, Simon), plus totals. Only the day rows are read. Feeds the Email: Shopify vs Samcart page. |
 | `Q1 MTD` | notebook (formulas) | Sales, Spend, ROAS and Platform ROAS, month to date vs the same days last month, per project and in total. The total ROAS counts only projects with ad spend in the window. |
 | `Q3 Trends` | notebook (values) | Per project and in total: Sales, Orders (Total Order), Spend, ROAS and Platform ROAS for four views: daily (this month vs last month), monthly and quarterly (this year vs last year) and yearly, each with running / to-date columns. A point is blank when no uploaded day falls in it; a note marks a point that is in progress or only partly uploaded. Feeds the charts. Includes a running Spend total (columns W/X) for the Spend chart. |
 | `UTM Data` | notebook | One row per project / day / UTM Source / UTM Content: Sales and Orders. Same overwrite-and-keep rule as `Data`. |
@@ -86,6 +87,17 @@ After that, every notebook run refreshes the numbers; just reload the page.
   scale would flatten the others), all following the Daily / Monthly / Quarterly / Yearly
   switch; then the top 10 tables and the funnel table. An **Email type** filter (All / Abandoned Cart / Regular Sales) at the top of the
   page switches every chart, card and table on it.
+- **Email: Shopify vs Samcart**: `?view=stores`. The `Sheet1` tab (an IMPORTRANGE of the Shopify-Samcart Daily
+  Report) as a heatmap: one row per day of the picked month, latest first, and a column per store and source (Shopify,
+  Samcart and both stores, each with Attentive, Emotive and Simon, then the sheet's totals). Each column is shaded on its
+  own scale, since Samcart Simon is far larger than the rest. Above the days: the month so far, the same days last month
+  and the change, plus tiles for the total, each store and the best day. A column with no sales in either month is
+  hidden. **Click any amount** (or a date, for the whole day, or a summary row, for the month) to open a side panel with
+  the UTM contents behind it from the `Email Data` tab: sales, orders, share and funnel per UTM Content (UTM Campaign for
+  Emotive), ranked by sales. Email Data comes from the orders export, which holds **Samcart orders only**, so a Shopify
+  cell says it has no UTM detail and shows Samcart's for context. Sheet1 is read fresh on every load (its IMPORTRANGE
+  refreshes on its own); the UTM detail is loaded one month at a time and cached per notebook run. If the tab is renamed,
+  change `STORES_TAB` in `Code.gs`.
 - **Refunds & Gross**: `?view=refunds`. From the Refunds + Gross exports (notebook section 6). An **Account** picker
   (All accounts or one account), then four large charts: Gross sales, Refunds, Refund rate and Net sales, each with its
   month-to-date number, the change vs the same days last month (percentage points for Refund rate) and an Each day /

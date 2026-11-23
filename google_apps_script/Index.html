@@ -32,6 +32,9 @@
     --other: #8a8cb3;
     --untagged: #3d3f73;
     --neutral: #33356a;
+    /* Heatmap: one hue, dim -> bright = low -> high. Steps 1-4 take light ink, 5-6 dark ink (all >= 4.7:1). */
+    --heat-1: #2a2d5e; --heat-2: #363a7c; --heat-3: #474b9c; --heat-4: #5c60bd; --heat-5: #7e82e6; --heat-6: #a9acf5;
+    --heat-ink-dark: #171932;
     --font: "Nunito Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -183,6 +186,54 @@
   td.content { max-width: 340px; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
   td.content.wrap { white-space: normal; max-width: none; min-width: 240px; overflow-wrap: anywhere; }
   table.static th { cursor: default; }
+  /* Email: Shopify vs Samcart heatmap. Each value cell is a button that opens the UTM side panel. */
+  table.heat { border-collapse: separate; border-spacing: 2px; }
+  table.heat th, table.heat td { border-bottom: 0; padding: 0; }
+  table.heat thead th { padding: 6px 8px; text-align: right; vertical-align: bottom; }
+  table.heat thead th.grp { text-align: center; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+  table.heat .day { position: sticky; left: 0; z-index: 1; background: var(--surface-1); text-align: left; padding: 0; }
+  table.heat tr.sum td { border-bottom: 0; }
+  table.heat tr.sum .hbtn, table.heat tr.sum .day-btn { font-weight: 700; }
+  table.heat tr.sum-gap td { height: 8px; }
+  .hbtn, .day-btn { display: block; width: 100%; min-width: 86px; padding: 6px 8px; border: 0; border-radius: 4px;
+    background: transparent; text-align: right; cursor: pointer; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .day-btn { text-align: left; min-width: 104px; color: var(--text-secondary); }
+  .hbtn:hover, .day-btn:hover { box-shadow: inset 0 0 0 1px var(--text-secondary); }
+  .hbtn[aria-pressed="true"], .day-btn[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--text-primary); }
+  .hbtn.zero { color: var(--text-muted); }
+  .h1 { background: var(--heat-1); } .h2 { background: var(--heat-2); } .h3 { background: var(--heat-3); }
+  .h4 { background: var(--heat-4); } .h5 { background: var(--heat-5); color: var(--heat-ink-dark); }
+  .h6 { background: var(--heat-6); color: var(--heat-ink-dark); }
+  .heat-legend { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; color: var(--text-muted); font-size: 12px; }
+  .heat-legend i { width: 22px; height: 12px; border-radius: 2px; display: inline-block; }
+  /* UTM side panel. On wide screens the page makes room for it, so every heatmap cell stays clickable. */
+  @media (min-width: 1000px) { body.utm-open .main { padding-right: calc(min(460px, 100vw) + 24px); } }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); z-index: 40; display: flex; flex-direction: column;
+    background: var(--panel); border-left: 1px solid var(--border); box-shadow: -12px 0 32px rgba(0, 0, 0, .35); }
+  .drawer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 18px 10px;
+    border-bottom: 1px solid var(--border); }
+  .drawer-head h2 { margin: 0; font-size: 16px; }
+  .drawer-head .note { margin: 4px 0 0; }
+  .drawer-close { flex: none; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-1); cursor: pointer; font-size: 18px; line-height: 1; }
+  .drawer-body { padding: 14px 18px 28px; overflow-y: auto; flex: 1; }
+  .drawer-body .info { background: var(--surface-1); border-left: 3px solid var(--accent); border-radius: 4px; padding: 10px 12px;
+    margin: 0 0 14px; color: var(--text-secondary); font-size: 13px; }
+  .drawer-body .info b { color: var(--text-primary); }
+  .utm-sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 14px; }
+  .utm-sum div { background: var(--surface-1); border-radius: 6px; padding: 8px 10px; }
+  .utm-sum b { display: block; font-size: 16px; }
+  .utm-sum span { color: var(--text-muted); font-size: 11px; }
+  .utm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .utm-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; }
+  .utm-name { overflow-wrap: anywhere; font-size: 13px; }
+  .utm-meta { grid-column: 1; color: var(--text-muted); font-size: 11px; overflow-wrap: anywhere; }
+  .utm-val { grid-column: 2; grid-row: 1 / span 2; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .utm-val span { display: block; color: var(--text-muted); font-size: 11px; }
+  .utm-bar { grid-column: 1 / -1; height: 4px; background: var(--neutral); border-radius: 2px; overflow: hidden; }
+  .utm-bar span { display: block; height: 100%; background: var(--now); border-radius: 0 2px 2px 0; }
+  .tag { display: inline-block; font-size: 10px; font-weight: 700; color: var(--text-primary); background: var(--surface-2);
+    border-radius: 4px; padding: 0 5px; margin-left: 4px; }
   td.indent { padding-left: 26px; }
   tr.subtotal td { font-style: italic; color: var(--text-secondary); }
   .share { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
@@ -238,6 +289,7 @@
       <button class="nav-item" data-go="all">All projects</button>
       <button class="nav-item" data-go="platforms">Facebook vs Google</button>
       <button class="nav-item" data-go="email">Email &amp; SMS</button>
+      <button class="nav-item" data-go="stores">Email: Shopify vs Samcart</button>
       <p class="nav-label">Brands</p>
       <div id="nav-projects"></div>
     </nav>
@@ -366,6 +418,25 @@
       </section>
     </div>
 
+    <!-- Email: Shopify vs Samcart (?view=stores): the Sheet1 tab (an IMPORTRANGE of the Shopify-Samcart Daily Report)
+         as a heatmap, one row per day. Clicking a cell opens the UTM side panel (#utm-drawer). -->
+    <div id="view-stores" hidden>
+      <div class="filter-bar">
+        <label class="caption" for="store-month">Month</label>
+        <select class="select" id="store-month"></select>
+        <span class="caption" id="store-note"></span>
+      </div>
+      <div class="tiles" id="store-tiles"></div>
+      <section class="card" style="margin-bottom:16px">
+        <h2>Email &amp; SMS sales by day</h2>
+        <p class="note" id="store-heat-note"></p>
+        <div class="heat-legend" aria-hidden="true">Lower <i style="background:var(--heat-1)"></i><i style="background:var(--heat-2)"></i>
+          <i style="background:var(--heat-3)"></i><i style="background:var(--heat-4)"></i><i style="background:var(--heat-5)"></i>
+          <i style="background:var(--heat-6)"></i> Higher &middot; each column on its own scale: the brightest cell is that column's best day this month</div>
+        <div class="scroll"><table class="heat static" id="store-heat"></table></div>
+      </section>
+    </div>
+
     <!-- MTD Revenue Report: a one-off report typed in by hand from the Konscious PnL workbook. The numbers live in
          REVENUE (script below); the text here is written for them, so update both together. -->
     <div id="view-revenue" hidden>
@@ -434,6 +505,13 @@
     </div>
   </main>
 </div>
+<aside class="drawer" id="utm-drawer" role="dialog" aria-modal="false" aria-labelledby="utm-title" tabindex="-1" hidden>
+  <div class="drawer-head">
+    <div><h2 id="utm-title"></h2><p class="note" id="utm-sub"></p></div>
+    <button type="button" class="drawer-close" id="utm-close" aria-label="Close the UTM panel">&times;</button>
+  </div>
+  <div class="drawer-body" id="utm-body"></div>
+</aside>
 <div id="tip" role="tooltip"></div>
 
 <script>
@@ -469,6 +547,7 @@
 
   // ---------- state ----------
   var q1Data = null, q2Data = null, emailData = null, trends = null, emailTrends = null, refundsData = null, dailyData = null;
+  var storesData = null;   // Email: Shopify vs Samcart (the Sheet1 tab)
   var view = 'all', currentProject = null, currentBrand = null, period = 'daily';
   var pickedDates = null;  // Brand overview / Facebook vs Google date filter: { lo, hi }; null = month to date
   var mode = { sales: 'each', orders: 'each', spend: 'each', roas: 'each', email: 'each',
@@ -484,10 +563,10 @@
   // calls run in parallel, and asking again while one is in flight reuses it. A failed call is
   // dropped so "Try again" refetches.
   var SERVER = { q1: 'getQ1', trends: 'getTrends', q2: 'getQ2', email: 'getEmail', emailTrends: 'getEmailTrends', refunds: 'getRefunds',
-    daily: 'getDaily' };
+    daily: 'getDaily', stores: 'getStores' };
   // The revenue report's numbers are in this page; it waits on q1 only for the side menu.
   var NEEDS = { all: ['q1', 'trends'], project: ['q1', 'trends', 'q2'], email: ['q1', 'email', 'emailTrends'], refunds: ['q1', 'refunds'],
-    revenue: ['q1'], brand: ['q1', 'daily'], platforms: ['q1', 'daily'] };
+    revenue: ['q1'], brand: ['q1', 'daily'], platforms: ['q1', 'daily'], stores: ['q1', 'stores'] };
   var ON_LOAD = {
     q1: function (d) { q1Data = d; buildNav(); renderBars(d.projects); renderTable(d); },
     trends: function (d) { trends = d; },
@@ -495,7 +574,8 @@
     email: function (d) { emailData = d; },
     emailTrends: function (d) { emailTrends = d; },
     refunds: function (d) { refundsData = d; },
-    daily: function (d) { dailyData = d; }
+    daily: function (d) { dailyData = d; },
+    stores: function (d) { storesData = d; }
   };
   var loaded = {}, inflight = {};
   function load(name) {
@@ -609,7 +689,8 @@
     view = v;
     setTitle(); markNav();
     // Refunds & Gross is daily only; the other pages here have no charts over time.
-    document.getElementById('period-seg').hidden = ['refunds', 'revenue', 'brand', 'platforms'].indexOf(v) >= 0;
+    document.getElementById('period-seg').hidden = ['refunds', 'revenue', 'brand', 'platforms', 'stores'].indexOf(v) >= 0;
+    if (v !== 'stores') closeUtm();
     if (!noPush) pushUrl();
     var need = NEEDS[v];
     if (need.every(function (n) { return loaded[n]; })) { renderView(); return Promise.resolve(); }
@@ -631,6 +712,7 @@
     document.getElementById('view-email').hidden = !on || view !== 'email';
     document.getElementById('view-refunds').hidden = !on || view !== 'refunds';
     document.getElementById('view-revenue').hidden = !on || view !== 'revenue';
+    document.getElementById('view-stores').hidden = !on || view !== 'stores';
   }
   function renderView() {
     ++viewSeq;   // a page that was still loading must not draw over this one
@@ -638,6 +720,7 @@
     if (view === 'email') { renderEmailPeriod(); renderEmail(); }
     else if (view === 'refunds') renderRefunds();
     else if (view === 'revenue') renderRevenue();
+    else if (view === 'stores') renderStores();
     else if (view === 'brand' || view === 'platforms') renderCompare();
     else { setPeriodText(); drawMetrics(); if (view === 'project') drawProject(); }
   }
@@ -650,7 +733,7 @@
       title.innerHTML = esc(currentBrand || '') + '<span class="chip">Overview</span>';
     } else title.textContent = view === 'all' ? 'All projects' : view === 'email' ? 'Email & SMS'
       : view === 'refunds' ? 'Refunds & Gross' : view === 'revenue' ? 'MTD Revenue Report'
-      : view === 'platforms' ? 'Facebook vs Google' : (currentProject || '');
+      : view === 'platforms' ? 'Facebook vs Google' : view === 'stores' ? 'Email: Shopify vs Samcart' : (currentProject || '');
   }
   function setPeriodText() {
     if (!q1Data) return;
@@ -1697,10 +1780,236 @@
       .concat([{ name: 'Google + Facebook + Email combined', v: core, fmt: fmtMoney, good: true, row: 'subtotal' }]));
   }
 
+  // ---------- Email: Shopify vs Samcart ----------
+  // The Sheet1 tab as a heatmap: one row per day of the picked month (latest first) and a column per store and source,
+  // as the sheet has them, each column shaded on its own scale. Above the days: the month so far, the same days last
+  // month and the change, as in the sheet's General Metrics. Any cell opens the UTM side panel for that day and column.
+  var storeMonth = null;              // 'yyyy-MM' on screen
+  var UTM_SOURCES = ['attentive', 'emotive', 'simon'];
+  var UTM_ALIASES = { simons: 'simon' };
+  // The sheet's "Total" group is both stores; its "Total" column with no source is every source and store.
+  function isTotal(c) { return /^total$/i.test(c.group); }
+  function colLabel(c) { return isTotal(c) ? (c.source ? c.source + ', both stores' : 'All email & SMS') : c.source ? c.group + ' ' + c.source : c.group; }
+  // Which UTM sources a column covers ("Total" covers all three), and its store (null = both).
+  function colSources(c) {
+    var l = colLabel(c).toLowerCase(), s = UTM_SOURCES.filter(function (x) { return l.indexOf(x) >= 0; });
+    return s.length ? s : UTM_SOURCES.slice();
+  }
+  function colStore(c) {
+    var g = c.group.toLowerCase();
+    return g.indexOf('shopify') >= 0 ? 'Shopify' : g.indexOf('samcart') >= 0 ? 'Samcart' : null;
+  }
+  function weekday(iso) { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(iso + 'T00:00:00Z').getUTCDay()]; }
+  function storeSum(lo, hi, idx) {
+    var d = storesData.days.filter(function (r) { return r[0] >= lo && r[0] <= hi; });
+    return d.length ? d.reduce(function (s, r) { return s + idx.reduce(function (t, i) { return t + (r[i + 1] || 0); }, 0); }, 0) : null;
+  }
+
+  function renderStores() {
+    var D = storesData, cols = D.columns;
+    var heat = document.getElementById('store-heat'), tiles = document.getElementById('store-tiles');
+    if (!D.days.length) {
+      document.getElementById('period').textContent = '';
+      tiles.innerHTML = '';
+      heat.innerHTML = '<tbody><tr><td class="note" style="text-align:left;padding:8px">No day rows found in the Sheet1 tab. If its first ' +
+        'cell shows #REF!, open the tab and click Allow access so the IMPORTRANGE can load.</td></tr></tbody>';
+      return;
+    }
+    var months = D.days.map(function (r) { return r[0].slice(0, 7); }).filter(function (m, i, a) { return a.indexOf(m) === i; }).reverse();
+    if (months.indexOf(storeMonth) < 0) storeMonth = months[0];
+    document.getElementById('store-month').innerHTML = months.map(function (m) {
+      return '<option value="' + m + '"' + (m === storeMonth ? ' selected' : '') + '>' + MONTHS[+m.slice(5) - 1] + ' ' + m.slice(0, 4) + '</option>';
+    }).join('');
+
+    var days = D.days.filter(function (r) { return r[0].slice(0, 7) === storeMonth; });
+    var lo = days[0][0], hi = days[days.length - 1][0], plo = monthBack(lo), phi = monthBack(hi);
+    var span = fmtSpan(lo, hi), pspan = fmtSpan(plo, phi), latest = D.days[D.days.length - 1][0];
+    var hasPrev = D.days.some(function (r) { return r[0] >= plo && r[0] <= phi; });
+    document.getElementById('period').textContent = span + ' vs the same days last month, ' + pspan + '. Latest day in Sheet1: ' + fmtSpan(latest, latest) + '.';
+    document.getElementById('store-note').textContent = hi === latest ? 'The latest day may still be filling in (the report syncs overnight).' : '';
+
+    // Columns: hide one with no sales in either window; say which.
+    var all = cols.map(function (c, i) { return i; });
+    var now = all.map(function (i) { return storeSum(lo, hi, [i]); }), prev = all.map(function (i) { return hasPrev ? storeSum(plo, phi, [i]) : null; });
+    var shown = all.filter(function (i) { return now[i] || prev[i]; });
+    var hidden = all.filter(function (i) { return shown.indexOf(i) < 0; }).map(function (i) { return colLabel(cols[i]); });
+    document.getElementById('store-heat-note').textContent = 'From the Sheet1 tab (the Shopify-Samcart Daily Report). Click any amount to see ' +
+      'the UTM contents behind it in a side panel; click a date for the whole day. ' +
+      (hidden.length ? 'Hidden, no sales in either month: ' + hidden.join(', ') + '.' : '');
+
+    // Tiles: total, each store, and the best day.
+    var byStore = function (name) { return all.filter(function (i) { return colStore(cols[i]) === name; }); };
+    var totalCol = all.filter(function (i) { return isTotal(cols[i]) && !cols[i].source; })[0];
+    var totalIdx = totalCol != null ? [totalCol] : byStore('Shopify').concat(byStore('Samcart'));
+    var dayTotal = function (r) { return totalIdx.reduce(function (s, i) { return s + (r[i + 1] || 0); }, 0); };
+    var best = days.reduce(function (b, r) { return !b || dayTotal(r) > dayTotal(b) ? r : b; }, null);
+    tiles.innerHTML = [['Total email & SMS', totalIdx], ['Samcart', byStore('Samcart')], ['Shopify', byStore('Shopify')]]
+      .filter(function (t) { return t[1].length; }).map(function (t) {
+        var a = storeSum(lo, hi, t[1]), b = hasPrev ? storeSum(plo, phi, t[1]) : null;
+        var share = t[0] !== 'Total email & SMS' && storeSum(lo, hi, totalIdx) ? ' &middot; ' + fmtRate(a / storeSum(lo, hi, totalIdx)) + ' of the total' : '';
+        return '<article class="card kpi"><div class="big">' + fmtMoney(a) + '</div><div class="kpi-label">' + esc(t[0]) + '</div>' +
+          '<div class="caption">' + (b ? delta(a / b - 1, true) + ' vs ' + fmtMoney(b) + ' in ' + esc(pspan) : 'no data for ' + esc(pspan)) + share + '</div></article>';
+      }).join('') + '<article class="card kpi"><div class="big">' + fmtMoney(dayTotal(best)) + '</div><div class="kpi-label">Best day</div>' +
+      '<div class="caption">' + weekday(best[0]) + ', ' + fmtSpan(best[0], best[0]) + '</div></article>';
+
+    // Header: a store row (one cell per run of same-store columns; a column with no source spans both rows), a source row.
+    var runs = [];
+    shown.forEach(function (i) {
+      var c = cols[i], r = runs[runs.length - 1];
+      if (c.source && r && r.group === c.group && r.source) r.n++;
+      else runs.push({ group: c.group, source: c.source, n: 1 });
+    });
+    var head = '<thead><tr><th class="day" rowspan="2" scope="col">Day</th>' + runs.map(function (r) {
+      var g = /^total$/i.test(r.group) ? (r.source ? 'Both stores' : 'All email & SMS') : r.group;
+      return r.source ? '<th class="grp" colspan="' + r.n + '" scope="colgroup">' + esc(g) + '</th>'
+        : '<th rowspan="2" scope="col">' + esc(g) + '</th>';
+    }).join('') + '</tr><tr>' + shown.filter(function (i) { return cols[i].source; }).map(function (i) {
+      return '<th scope="col">' + esc(cols[i].source) + '</th>';
+    }).join('') + '</tr></thead>';
+
+    // Summary rows (not shaded): this month, the same days last month, and the change.
+    var sumBtn = function (i, v, range) {
+      return '<td><button type="button" class="hbtn" data-lo="' + range[0] + '" data-hi="' + range[1] + '" data-c="' + i + '">' + fmtMoney(v) + '</button></td>';
+    };
+    var body = '<tr class="sum"><td class="day"><button type="button" class="day-btn" data-lo="' + lo + '" data-hi="' + hi + '">' + esc(span) + '</button></td>' +
+      shown.map(function (i) { return sumBtn(i, now[i], [lo, hi]); }).join('') + '</tr>' +
+      '<tr class="sum"><td class="day"><button type="button" class="day-btn" data-lo="' + plo + '" data-hi="' + phi + '">' + esc(pspan) + '</button></td>' +
+      shown.map(function (i) { return hasPrev ? sumBtn(i, prev[i], [plo, phi]) : '<td class="note">n/a</td>'; }).join('') + '</tr>' +
+      '<tr class="sum"><td class="day"><span class="day-btn" style="cursor:default">Change</span></td>' + shown.map(function (i) {
+        return '<td style="padding:6px 8px">' + (prev[i] ? delta(now[i] / prev[i] - 1, true) : '<span class="note">n/a</span>') + '</td>';
+      }).join('') + '</tr><tr class="sum-gap"><td colspan="' + (shown.length + 1) + '"></td></tr>';
+
+    // Day rows, latest first, each column shaded in six steps of its own best day.
+    var max = {};
+    shown.forEach(function (i) { max[i] = Math.max.apply(null, days.map(function (r) { return r[i + 1] || 0; }).concat([0])); });
+    body += days.slice().reverse().map(function (r) {
+      return '<tr><td class="day"><button type="button" class="day-btn" data-lo="' + r[0] + '" data-hi="' + r[0] + '">' + weekday(r[0]) + ', ' +
+        fmtSpan(r[0], r[0]) + '</button></td>' + shown.map(function (i) {
+          var v = r[i + 1], step = v > 0 && max[i] > 0 ? Math.max(1, Math.ceil(v / max[i] * 6)) : 0;
+          return '<td><button type="button" class="hbtn' + (step ? ' h' + step : ' zero') + '" data-lo="' + r[0] + '" data-hi="' + r[0] +
+            '" data-c="' + i + '">' + (v == null ? '&ndash;' : fmtMoney(v)) + '</button></td>';
+        }).join('') + '</tr>';
+    }).join('');
+    heat.innerHTML = head + '<tbody>' + body + '</tbody>';
+
+    heat.querySelectorAll('.hbtn, button.day-btn').forEach(function (b) {
+      var c = b.dataset.c != null ? +b.dataset.c : null;
+      b.addEventListener('click', function () { openUtm(b, b.dataset.lo, b.dataset.hi, c); });
+      if (c == null || b.dataset.lo !== b.dataset.hi) return;
+      b.addEventListener('mousemove', function (e) {
+        var v = storeSum(b.dataset.lo, b.dataset.lo, [c]);
+        showTip(e, '<b>' + esc(colLabel(cols[c])) + '</b><br>' + weekday(b.dataset.lo) + ', ' + fmtSpan(b.dataset.lo, b.dataset.lo) + ': ' +
+          fmtMoney(v) + (now[c] ? ' (' + fmtRate(v / now[c]) + ' of the month)' : '') + '<br>Click for the UTM contents');
+      });
+      b.addEventListener('mouseleave', hideTip);
+    });
+    loadUtm(storeMonth).catch(function () {});   // so the first click opens with its detail ready
+  }
+  document.getElementById('store-month').addEventListener('change', function () { storeMonth = this.value; closeUtm(); renderStores(); });
+
+  // ---------- UTM side panel ----------
+  // The Email Data rows for one month, loaded on first use and kept.
+  var utmByMonth = {}, utmInflight = {}, utmSeq = 0, utmOpener = null;
+  function loadUtm(month) {
+    if (utmByMonth[month]) return Promise.resolve(utmByMonth[month]);
+    return utmInflight[month] || (utmInflight[month] = new Promise(function (resolve, reject) {
+      google.script.run
+        .withSuccessHandler(function (rows) { delete utmInflight[month]; utmByMonth[month] = rows; resolve(rows); })
+        .withFailureHandler(function (e) { delete utmInflight[month]; reject(e); })
+        .getEmailUtm(month);
+    }));
+  }
+  function utmSource(s) { s = String(s).toLowerCase().trim(); return UTM_ALIASES[s] || s; }
+  function closeUtm() {
+    var d = document.getElementById('utm-drawer');
+    if (d.hidden) return;
+    d.hidden = true; utmSeq++;
+    document.body.classList.remove('utm-open');
+    document.querySelectorAll('#store-heat [aria-pressed]').forEach(function (b) { b.removeAttribute('aria-pressed'); });
+    if (utmOpener && document.body.contains(utmOpener)) utmOpener.focus();
+    utmOpener = null;
+  }
+  document.getElementById('utm-close').addEventListener('click', closeUtm);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeUtm(); });
+
+  // c: the Sheet1 column clicked (null = a date: every source, both stores). lo..hi: one day or a summary window.
+  function openUtm(btn, lo, hi, c) {
+    var cols = storesData.columns, col = c == null ? null : cols[c];
+    var sources = col ? colSources(col) : UTM_SOURCES.slice(), store = col ? colStore(col) : null;
+    var srcNames = sources.map(function (s) { return s.charAt(0).toUpperCase() + s.slice(1); }).join(' + ');
+    var drawer = document.getElementById('utm-drawer'), bodyEl = document.getElementById('utm-body');
+    document.querySelectorAll('#store-heat [aria-pressed]').forEach(function (b) { b.removeAttribute('aria-pressed'); });
+    btn.setAttribute('aria-pressed', 'true');
+    utmOpener = btn;
+    var when = lo === hi ? weekday(lo) + ', ' + fmtSpan(lo, hi) : fmtSpan(lo, hi);
+    document.getElementById('utm-title').textContent = col ? colLabel(col) : 'All email & SMS';
+    document.getElementById('utm-sub').textContent = when;
+    // What Sheet1 shows for this click, and the Shopify part of it (which has no UTM detail).
+    var idx = col ? [c] : cols.map(function (x, i) { return i; }).filter(function (i) { return isTotal(cols[i]) && !cols[i].source; });
+    if (!col && !idx.length) idx = cols.map(function (x, i) { return i; }).filter(function (i) { return colStore(cols[i]); });
+    var sheetVal = storeSum(lo, hi, idx);
+    var shopIdx = cols.map(function (x, i) { return i; }).filter(function (i) {
+      return colStore(cols[i]) === 'Shopify' && colSources(cols[i]).some(function (s) { return sources.indexOf(s) >= 0; }) && cols[i].source;
+    });
+    var shopVal = store === 'Samcart' ? 0 : storeSum(lo, hi, shopIdx) || 0;
+    bodyEl.innerHTML = '<p class="note"><span class="spinner" aria-hidden="true"></span> Loading the UTM detail&hellip;</p>';
+    drawer.hidden = false;
+    document.body.classList.add('utm-open');
+    drawer.focus();
+    var seq = ++utmSeq;
+    loadUtm(lo.slice(0, 7)).then(function (rows) {
+      if (seq !== utmSeq) return;
+      // Group by name: UTM Content, or UTM Campaign for Emotive (its content is always blank).
+      var items = {}, total = 0, orders = 0;
+      rows.forEach(function (r) {
+        var src = utmSource(r[1]);
+        if (r[0] < lo || r[0] > hi || sources.indexOf(src) < 0) return;
+        var name = (src === 'emotive' ? r[2] : r[3]) || '(not tagged)', key = src + '\u0000' + name;
+        var it = items[key] || (items[key] = { name: name, source: src, sales: 0, orders: 0, funnels: {}, abandoned: false });
+        it.sales += r[5] || 0; it.orders += r[6] || 0; total += r[5] || 0; orders += r[6] || 0;
+        if (r[4]) it.funnels[r[4]] = (it.funnels[r[4]] || 0) + (r[5] || 0);
+        if (/abandon/i.test(r[7])) it.abandoned = true;
+      });
+      var list = Object.keys(items).map(function (k) { return items[k]; }).sort(function (a, b) { return b.sales - a.sales; });
+      var info = '';
+      if (store === 'Shopify') info = '<p class="info"><b>Shopify has no UTM detail.</b> The UTM data comes from the orders export, which holds ' +
+        'Samcart orders only. Below, for context: Samcart\'s ' + esc(srcNames) + ' for the same ' + (lo === hi ? 'day' : 'dates') + '.</p>';
+      else if (shopVal) info = '<p class="info">This detail covers <b>Samcart orders only</b> (the orders export). Shopify\'s ' +
+        fmtMoney(shopVal) + ' of the ' + fmtMoney(sheetVal) + ' in Sheet1 has no UTM detail.</p>';
+      var sum = '<div class="utm-sum"><div><b>' + fmtMoney(sheetVal) + '</b><span>in Sheet1</span></div><div><b>' + fmtMoney(total) +
+        '</b><span>in the orders export</span></div><div><b>' + fmtCount(orders) + '</b><span>orders, ' + fmtCount(list.length) + ' UTM ' +
+        (list.length === 1 ? 'name' : 'names') + '</span></div></div>';
+      if (!list.length) {
+        bodyEl.innerHTML = info + sum + '<p class="note">No ' + esc(srcNames) + ' orders in the orders export for ' + esc(when) + '.' +
+          (sheetVal > 0 && store !== 'Shopify' ? ' Sheet1 shows sales here, so the orders export for these dates may not be uploaded yet.' : '') + '</p>';
+        return;
+      }
+      var many = sources.length > 1, top = list[0].sales || 1, LIMIT = 25;
+      var itemHtml = function (it) {
+        var f = Object.keys(it.funnels).sort(function (a, b) { return it.funnels[b] - it.funnels[a]; });
+        var meta = [many ? it.source.charAt(0).toUpperCase() + it.source.slice(1) : '', f.length ? (f.length > 1 ? f[0] + ' +' + (f.length - 1) + ' more' : f[0]) : '']
+          .filter(Boolean).join(' &middot; ');
+        return '<li class="utm-item"><div class="utm-name">' + esc(it.name) + (it.abandoned ? '<span class="tag">Abandoned cart</span>' : '') + '</div>' +
+          '<div class="utm-val">' + fmtMoney(it.sales) + '<span>' + (total ? fmtRate(it.sales / total) : '') + ' &middot; ' + fmtCount(it.orders) + ' orders</span></div>' +
+          '<div class="utm-meta">' + meta + '</div><div class="utm-bar"><span style="width:' + Math.max(0, it.sales / top * 100) + '%"></span></div></li>';
+      };
+      bodyEl.innerHTML = info + sum + '<p class="note">Ranked by sales. ' + (sources.indexOf('emotive') >= 0 ? 'Emotive is listed by UTM Campaign (its UTM Content is always blank); the rest by UTM Content.' : 'Listed by UTM Content.') + '</p>' +
+        '<ol class="utm-list">' + list.slice(0, LIMIT).map(itemHtml).join('') + '</ol>' +
+        (list.length > LIMIT ? '<p><button type="button" class="retry" id="utm-more">Show all ' + list.length + '</button></p>' : '');
+      var more = document.getElementById('utm-more');
+      if (more) more.addEventListener('click', function () {
+        bodyEl.querySelector('.utm-list').innerHTML = list.map(itemHtml).join(''); more.parentNode.remove();
+      });
+    }, function (e) {
+      if (seq !== utmSeq) return;
+      bodyEl.innerHTML = '<p class="error">Could not load the UTM detail: ' + esc(e.message || e) + '</p>';
+    });
+  }
+
   // ---------- load ----------
   // Read the page from the link first (no server call), so a ?project=, ?view=email, ?view=refunds or
   // ?view=revenue link fetches its own data straight away instead of waiting for the All projects data.
-  var LINK_VIEWS = ['email', 'refunds', 'revenue', 'platforms'];
+  var LINK_VIEWS = ['email', 'refunds', 'revenue', 'platforms', 'stores'];
   function start(prm) {
     if (prm.project) currentProject = prm.project;
     if (prm.brand) currentBrand = prm.brand;
